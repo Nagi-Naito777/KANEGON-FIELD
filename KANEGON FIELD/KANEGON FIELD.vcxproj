@@ -135,6 +135,7 @@
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="InterfaceScene.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Picture.cpp" />
     <ClCompile Include="SceneManager.cpp" />
     <ClCompile Include="SelectScene.cpp" />
     <ClCompile Include="SettingScene.cpp" />
@@ -144,6 +145,7 @@
     <ClInclude Include="BattleScene.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InterfaceScene.h" />
+    <ClInclude Include="Picture.h" />
     <ClInclude Include="SceneManager.h" />
     <ClInclude Include="SelectScene.h" />
     <ClInclude Include="SettingScene.h" />
