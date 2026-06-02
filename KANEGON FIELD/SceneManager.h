@@ -1,9 +1,29 @@
+// ゲームシーン管理クラス
 #pragma once
 
-#include <memory>           // std::unique_ptr（スマートポインタ）を使うために必須
-#include "InterfaceScene.h" // シーンの土台（IScene）や、シーン名のリスト（SceneName）が定義されているヘッダー
+// メモリの自動管理用ヘッダー
+#include <memory>
+// シーンの共通ルール(IScene)と名前(SceneName)が定義されているヘッダー
+#include "InterfaceScene.h"
 
-class SceneManager
-{
+class SceneManager {
+private:
+    // 現在表示しているシーンの実体
+    std::unique_ptr<IScene> m_currentScene;
+
+    // 現在のシーンの種類
+    SceneName m_currentName;
+
+    // 指定したシーンを新しく生成する関数
+    std::unique_ptr<IScene> CreateScene(SceneName name);
+
+public:
+    // コンストラクタ
+    SceneManager(SceneName startScene);
+
+    // 更新処理
+    void Update(const InputManager& input);
+
+    // 描画処理
+    void Draw() const;
 };
-
