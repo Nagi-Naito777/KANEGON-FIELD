@@ -73,7 +73,7 @@ void TitleScene::Draw() const {
     int NameBoxEnd_x = 650;
     int NameBoxEnd_y = 425;
 
-    DrawGraph(0, 0, Pic.Tit, TRUE);
+    DrawGraph(0, 0, Pic.GetTit(), TRUE);
 
     // ボックス描画
     unsigned int boxColor = isFocused ? GetColor(255, 255, 100) : GetColor(255, 255, 255);
@@ -85,10 +85,10 @@ void TitleScene::Draw() const {
 
     // ボタンの描画（マウスホバーで画像変更）
     if (isStartHover) {
-        Pic.MouseHoverDraw(350, 431, Pic.Tit_Button);
+        Pic.MouseHoverDraw(350, 431, Pic.GetTitButton());
     }
     else {
-        DrawGraph(350, 430, Pic.Tit_Button, TRUE);
+        DrawGraph(350, 430, Pic.GetTitButton(), TRUE);
     }
 
     // 文字列の表示

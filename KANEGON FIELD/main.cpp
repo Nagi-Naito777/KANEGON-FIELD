@@ -34,6 +34,9 @@
 #include <random>
 #include <vector>
 #include "DxLib.h"
+#include "Picture.h"
+#include "InputManager.h"
+#include "SceneManager.h"
 
 // クラスのインスタンス化
 
@@ -46,11 +49,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     SetBackgroundColor(255, 255, 255);			// 背景色設定
     SetDrawScreen(DX_SCREEN_BACK);
 
+    // 画像の読み込み
+    Pic.Read();
+
+    // マネージャーの生成
+    InputManager inputManager;
+
+    // 初期シーンを「タイトル」に指定してシーンマネージャーを作成
+    SceneManager sceneManager(SceneName::TITLE);
+
     while (ScreenFlip() == 0 &&			// 全背景を消す
         ClearDrawScreen() == 0 &&		// 画面に描かれたものを消去する
-        ProcessMessage() == 0) 		    // ウィンドウズのメッセージ処理
+        ProcessMessage() == 0 &&        // ウィンドウズのメッセージ処理
+        CheckHitKey(KEY_INPUT_ESCAPE) == 0)
     {
-        
+        // 入力状態の更新
+        inputManager.Update();
+
+        // ゲームの更新処理
+        sceneManager.Update(inputManager);
+
+        // ゲームの描画処理
+        sceneManager.Draw();
     }
 
 
