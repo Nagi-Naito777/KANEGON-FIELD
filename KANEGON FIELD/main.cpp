@@ -23,9 +23,7 @@
 * 　
 */
 
-//画面サイズ指定マクロ
-#define WIN_MAX_X 1000
-#define WIN_MAX_Y 800
+
 
 
 // インクルード系統
@@ -34,6 +32,7 @@
 #include <random>
 #include <vector>
 #include "DxLib.h"
+#include "GameConfig.h"
 #include "Picture.h"
 #include "InputManager.h"
 #include "SceneManager.h"
@@ -49,6 +48,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     SetGraphMode(WIN_MAX_X, WIN_MAX_Y, 32);     // ウィンドウのサイズ変更
     SetBackgroundColor(255, 255, 255);			// 背景色設定
     SetDrawScreen(DX_SCREEN_BACK);
+
+    // 色の読み込み
+    Col.Init();
+
+    // フォントの読み込み
+    Font.Init();
 
     // 画像の読み込み
     Pic.Read();
@@ -85,6 +90,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         sceneManager.Draw();
     }
 
+    // ゲームコンフィグ内の関数の削除
+    Font.End();
 
     DxLib_End();
     return 0;

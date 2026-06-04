@@ -1,6 +1,7 @@
 #include "TitleScene.h"
 #include "Picture.h"
 #include "DxLib.h"
+#include "GameConfig.h"
 
 TitleScene::TitleScene() {
     // タイトル画面用の画像読み込みなどがあればここで行う
@@ -18,16 +19,16 @@ void TitleScene::Init() {
 
         // 各種色を設定（黒文字、白背景、白カーソルなど）
         SetKeyInputStringColor(
-            inputHandle, 
-            GetColor(0, 0, 0), 
+            inputHandle,
+            Col.GetBla(),
             GetColor(150, 150, 150),
-            GetColor(0, 0, 0), 
-            GetColor(255, 255, 255), 
-            GetColor(255, 255, 255),
-            GetColor(255, 0, 0), 
+            Col.GetBla(),
+            Col.GetWhi(),
+            Col.GetWhi(),
+            Col.GetRed(),
             GetColor(150, 150, 150), 
-            GetColor(255, 255, 255),
-            GetColor(255, 255, 255)
+            Col.GetWhi(),
+            Col.GetWhi()
         );
     }
 }
@@ -73,32 +74,36 @@ void TitleScene::Draw() const {
     int NameBoxEnd_x = 650;
     int NameBoxEnd_y = 425;
 
-    DrawGraph(0, 0, Pic.GetTit(), TRUE);
+    DrawGraph(START_X, START_Y, Pic.GetTit(), TRUE);
 
     // ボックス描画
-    unsigned int boxColor = isFocused ? GetColor(255, 255, 100) : GetColor(255, 255, 255);
+    unsigned int boxColor = isFocused ? Col.GetCurYel() : Col.GetWhi();
     DrawBox(NameBox_x, NameBox_y, NameBoxEnd_x, NameBoxEnd_y, boxColor, TRUE);
-    DrawBox(NameBox_x, NameBox_y, NameBoxEnd_x, NameBoxEnd_y, GetColor(0, 0, 0), FALSE);
+    DrawBox(NameBox_x, NameBox_y, NameBoxEnd_x, NameBoxEnd_y, Col.GetBla(), FALSE);
 
     // 現在入力されている名前を取得（GetNameがconstなので呼べる）
     std::string currentName = GetName();
 
+    int Button_y = 430;
     // ボタンの描画（マウスホバーで画像変更）
     if (isStartHover) {
-        Pic.MouseHoverDraw(350, 431, Pic.GetTitButton());
+        Pic.MouseHoverDraw(NameBox_x, Button_y + 1, Pic.GetTitButton());
     }
     else {
-        DrawGraph(350, 430, Pic.GetTitButton(), TRUE);
+        DrawGraph(NameBox_x, Button_y, Pic.GetTitButton(), TRUE);
     }
+
+    // 名前入力欄の文字表示の原点座標
+    int Name_x = 355, Name_y = 390;
 
     // 文字列の表示
     if (isFocused) {
-        DrawKeyInputString(355, 390, inputHandle);
+        DrawKeyInputString(Name_x, Name_y, inputHandle);
     }
     else {
         // 未入力なら案内、入力済みならその名前を出す
         std::string user_name = currentName.empty() ? _T("ここをクリックして名前入力") : currentName;
-        unsigned int fontColor = currentName.empty() ? GetColor(150, 150, 150) : GetColor(0, 0, 0);
-        DrawString(355, 390, user_name.c_str(), fontColor);
+        unsigned int fontColor = currentName.empty() ? GetColor(150, 150, 150) : Col.GetWhi();
+        DrawString(Name_x, Name_y, user_name.c_str(), fontColor);
     }
 }

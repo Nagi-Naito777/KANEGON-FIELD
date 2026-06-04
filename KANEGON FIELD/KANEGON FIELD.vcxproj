@@ -135,7 +135,6 @@
     <ClCompile Include="Card.cpp" />
     <ClCompile Include="CardDatabase.cpp" />
     <ClCompile Include="InputManager.cpp" />
-    <ClCompile Include="InterfaceScene.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Picture.cpp" />
     <ClCompile Include="Player.cpp" />
@@ -149,6 +148,7 @@
     <ClInclude Include="BattleScene.h" />
     <ClInclude Include="Card.h" />
     <ClInclude Include="CardDatabase.h" />
+    <ClInclude Include="GameConfig.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InterfaceScene.h" />
     <ClInclude Include="Picture.h" />
