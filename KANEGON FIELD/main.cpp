@@ -37,6 +37,7 @@
 #include "Picture.h"
 #include "InputManager.h"
 #include "SceneManager.h"
+#include "CardDatabase.h"
 
 // クラスのインスタンス化
 
@@ -51,6 +52,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     // 画像の読み込み
     Pic.Read();
+
+    // カードCSVの読み込みとエラー処理
+    const std::string CSV_PATH = "./data/csv/CardData.csv"; // ※実際のパスに合わせてください
+    if (!CardDB.Load(CSV_PATH)) {
+        // 失敗したら画面にメッセージを出して止める
+        printfDx("エラー: %s が見つかりません！\n", CSV_PATH.c_str());
+        ScreenFlip();
+        WaitKey();
+        DxLib_End();
+        return -1;
+    }
 
     // マネージャーの生成
     InputManager inputManager;
