@@ -24,16 +24,17 @@ SettingScene::SettingScene(SelectScene::Option mode)
 }
 
 // ヘルパー関数の実装
-void SettingScene::DrawPlayerTeam(const std::string& nameStr, int y) const {
+void SettingScene::DrawPlayerTeam(const std::string& nameStr, int y, unsigned int bgColor) const {
     // 名前表示用のUI描画
     int start_name_x = 300;
     int end_name_x = 700;
     DrawCircle(start_name_x, y, 15, Col.GetBla(), FALSE);
     DrawCircle(end_name_x, y, 15, Col.GetBla(), FALSE);
     DrawBox(start_name_x, y - 15, end_name_x, y + 16, Col.GetBla(), FALSE);
-    DrawCircle(start_name_x, y, 14, Col.GetWhi(), TRUE);
-    DrawCircle(end_name_x, y, 14, Col.GetWhi(), TRUE);
-    DrawBox(start_name_x + 1, y - 14, end_name_x - 1, y + 15, Col.GetWhi(), TRUE);
+
+    DrawCircle(start_name_x, y, 14, bgColor, TRUE);
+    DrawCircle(end_name_x, y, 14, bgColor, TRUE);
+    DrawBox(start_name_x + 1, y - 14, end_name_x - 1, y + 15, bgColor, TRUE);
 
     const char* name = nameStr.c_str();
     int centerX = 500;
@@ -154,6 +155,7 @@ SceneName SettingScene::Update(const InputManager& input) {
             case TEAM_YELLOW:
             case TEAM_GREEN:
                 SelectTeam(selectedOption);
+                isBattlePlayer[0] = true;
                 break;
 
             case RETURN:
@@ -248,12 +250,25 @@ void SettingScene::Draw() const {
                     else { DrawGraph(50, 100, Pic.GetSoloButton(), TRUE); }
                 }
 
+                // 選んでいるチームの色を判定する
+                unsigned int myColor = Col.GetWhi(); // デフォルトは白（個人・未選択）
+                if (isTeam[TEAM_RED])    myColor = Col.GetRed();
+                if (isTeam[TEAM_BLUE])   myColor = Col.GetBlu();
+                if (isTeam[TEAM_YELLOW]) myColor = Col.GetYel();
+                if (isTeam[TEAM_GREEN])  myColor = Col.GetGre();
+
                 for (int j = 0; j < MEMBER_MAX; j++) {
-                    if (isBattlePlayer[j]) { DrawPlayerTeam(g_player.getName(), 100 + (j * 40)); }
-                    else { DrawPlayerTeam(_T(" "), 100 + (j * 40)); }
+                    if (isBattlePlayer[j]) {
+                        // j==0 (自分) のときは選んだ色。他のプレイヤーが増えた場合はとりあえず白等にする
+                        unsigned int drawColor = (j == 0) ? myColor : Col.GetWhi();
+                        DrawPlayerTeam(g_player.getName(), 100 + (j * 40), drawColor);
+                    }
+                    else {
+                        // 誰もいない空枠は白で空欄を描画
+                        DrawPlayerTeam(_T(" "), 100 + (j * 40), Col.GetWhi());
+                    }
                 }
                 break;
-            default: break;
             }
         }
     }

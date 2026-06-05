@@ -3,6 +3,8 @@
 #include "Picture.h"
 #include "GameConfig.h"
 
+SelectScene::Option g_selectedMode = SelectScene::Option::PVP;
+
 // コンストラクタ
 SelectScene::SelectScene() : selectedOption(NONE) {
     for (int i = 0; i < MAX; i++) {
@@ -43,9 +45,14 @@ SceneName SelectScene::Update(const InputManager& input) {
                 return SceneName::TITLE;  // タイトルへ戻る
 
             case TRANING:
+                g_selectedMode = SelectScene::Option::TRANING;
+                return SceneName::SETTING; // 設定画面へ進む
             case PVP:
+                g_selectedMode = SelectScene::Option::PVP;
+                return SceneName::SETTING; // 設定画面へ進む
             case TAIMAN:
-                return SceneName::BATTLE; // バトルへ進む
+                g_selectedMode = SelectScene::Option::TAIMAN;
+                return SceneName::SETTING; // 設定画面へ進む
             }
         }
     }

@@ -86,9 +86,9 @@ public:
 
     // ‰Šú‰»ˆ—
     void Init() {
-        m_red = GetColor(255, 0, 0);    // Ô
-        m_blu = GetColor(0, 0, 255);    // Â
-        m_gre = GetColor(0, 255, 0);    // —Î
+        m_red = GetColor(255, 100, 100);// Ô
+        m_blu = GetColor(150, 150, 255);// Â
+        m_gre = GetColor(100, 255, 100);// —Î
         m_yel = GetColor(255, 255, 0);  // ‰©F
         m_bla = GetColor(0, 0, 0);      // •
         m_whi = GetColor(255, 255, 255);// ”’

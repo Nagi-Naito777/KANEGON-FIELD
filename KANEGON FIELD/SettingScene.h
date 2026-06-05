@@ -42,7 +42,7 @@ public:
 
 private:
     // --- “à•”ˆ——p‚Ìƒwƒ‹ƒp[ŠÖ”  ---
-    void DrawPlayerTeam(const std::string& nameStr, int y) const;
+    void DrawPlayerTeam(const std::string& nameStr, int y, unsigned int bgColor) const;
     void BlackDrawBox(int x, int y, int x2, int y2) const;
     void SelectTeam(int teamId);
 

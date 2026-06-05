@@ -26,3 +26,4 @@ private:
     bool isHoverIdx[MAX];       // 各ボタンの上にマウスがあるか
 };
 
+extern SelectScene::Option g_selectedMode;
