@@ -8,7 +8,7 @@
 class TitleScene :public IScene
 {
 private:
-    int inputHandle = -1;   // DXライブラリの文字入力ハンドル
+    int inputHandle = -1;      // DXライブラリの文字入力ハンドル
     bool isHover = false;      // 入力ボックスの上にマウスがあるか
     bool isStartHover = false; // スタートボタンの上にマウスがあるか
     bool isFocused = false;    // 入力ボックスにフォーカスが当たっているか
@@ -18,7 +18,7 @@ public:
     TitleScene();
 
     // デストラクタ
-    ~TitleScene() override = default;
+    ~TitleScene() override;
 
     // 初期化
     void Init();

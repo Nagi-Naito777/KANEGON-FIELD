@@ -2,9 +2,10 @@
 #include "Picture.h"
 #include "DxLib.h"
 #include "GameConfig.h"
+#include "Player.h"
 
 TitleScene::TitleScene() {
-    // タイトル画面用の画像読み込みなどがあればここで行う
+    Init();
 }
 
 TitleScene::~TitleScene() {
@@ -17,37 +18,47 @@ void TitleScene::Init() {
         // ※日本語（漢字）を入力したい場合は、第2引数を TRUE にしてください
         inputHandle = MakeKeyInput(16, FALSE, FALSE, FALSE);
 
+        // もし既にプレイヤー名が存在するなら、入力ハンドルに反映させる
+        if (!g_player.getName().empty()) {
+            SetKeyInputString(g_player.getName().c_str(), inputHandle);
+        }
+
         // 各種色を設定（黒文字、白背景、白カーソルなど）
         SetKeyInputStringColor(
-            inputHandle,
-            Col.GetBla(),
-            GetColor(150, 150, 150),
-            Col.GetBla(),
-            Col.GetWhi(),
-            Col.GetWhi(),
-            Col.GetRed(),
-            GetColor(150, 150, 150), 
-            Col.GetWhi(),
-            Col.GetWhi()
+            inputHandle,    // 1. 対象のハンドル
+            Col.GetBla(),   // 2. 文字色（通常）
+            Col.GetGra(),   // 3. 背景色（通常）
+            Col.GetBla(),   // 4. 文字色（キャンセル）
+            Col.GetWhi(),   // 5. 背景色（キャンセル）
+            Col.GetWhi(),   // 6. カーソル色
+            Col.GetRed(),   // 7. 文字色（選択中）
+            Col.GetGra(),   // 8. 背景色（選択中）
+            Col.GetWhi(),   // 9. 文字色（IME候補など）
+            Col.GetWhi()    // 10. 背景色（IME候補など）
         );
     }
 }
 
 SceneName TitleScene::Update(const InputManager& input) {
 
-    // 1. InputManagerの機能を使って、指定の矩形内にマウスがあるか判定
+    // InputManagerの機能を使って、指定の矩形内にマウスがあるか判定
     isHover = input.IsMouseOver(350, 375, 300, 50);
     isStartHover = input.IsMouseOver(350, 430, 300, 150);
 
-    // 2. 左クリックされた瞬間の処理
+    // 左クリックされた瞬間の処理
     if (input.IsLeftClicked()) {
         if (isHover) {
             isFocused = true;
             SetActiveKeyInput(inputHandle); // 入力欄をアクティブ化
         }
         else if (isStartHover) {
-            // スタートボタンが押されたら「モード選択画面」へ遷移を要求
-            return SceneName::SELECT;
+            std::string name = GetName();
+            if (!name.empty()) {
+                g_player.setName(name);
+                return SceneName::SELECT;
+            }
+            isFocused = true;
+            SetActiveKeyInput(inputHandle);
         }
         else {
             isFocused = false;
@@ -55,16 +66,20 @@ SceneName TitleScene::Update(const InputManager& input) {
         }
     }
 
-    // 3. キーボードによる文字入力確定の判定
+    // キーボードによる文字入力確定の判定
     if (isFocused) {
         int state = CheckKeyInput(inputHandle);
         if (state == 1) { // Enterキーで確定
-            isFocused = false;
-            return SceneName::SELECT; // 確定と同時に「モード選択画面」へ
+            std::string name = GetName();
+            if (!name.empty()) {
+                isFocused = false;
+                g_player.setName(name);
+                return SceneName::SELECT;
+            }
         }
     }
 
-    // 4. シーンを切り替えない場合は、自分自身(TitleScene)を返して現状維持
+    // シーンを切り替えない場合は、自分自身(TitleScene)を返して現状維持
     return SceneName::TITLE;
 }
 
@@ -103,7 +118,21 @@ void TitleScene::Draw() const {
     else {
         // 未入力なら案内、入力済みならその名前を出す
         std::string user_name = currentName.empty() ? _T("ここをクリックして名前入力") : currentName;
-        unsigned int fontColor = currentName.empty() ? GetColor(150, 150, 150) : Col.GetWhi();
+        unsigned int fontColor = currentName.empty() ? Col.GetGra() : Col.GetBla();
         DrawString(Name_x, Name_y, user_name.c_str(), fontColor);
     }
+}
+
+std::string TitleScene::GetName() const {
+    // ハンドルが作られていない場合は空っぽの文字を返す
+    if (inputHandle == -1) return "";
+
+    // 文字を受け取るための空の箱（バッファ）を用意
+    char buffer[256] = { 0 };
+
+    // DXライブラリの機能で、指定したハンドルの入力文字列を buffer にコピーする
+    GetKeyInputString(buffer, inputHandle);
+
+    // charの配列を C++ の std::string に変換して返す
+    return std::string(buffer);
 }

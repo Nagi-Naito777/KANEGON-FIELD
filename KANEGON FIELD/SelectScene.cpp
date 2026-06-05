@@ -25,7 +25,7 @@ SceneName SelectScene::Update(const InputManager& input) {
     }
 
     for (int i = 0; i < MAX; i++) {
-        // マウスが乗っているかの判定（InputManagerにお任せ！）
+        // マウスが乗っているかの判定
         if (i == RETURN) {
             isHoverIdx[i] = input.IsMouseOver(10, 10, 100, 30);
         }
@@ -33,7 +33,7 @@ SceneName SelectScene::Update(const InputManager& input) {
             isHoverIdx[i] = input.IsMouseOver(SELBUT_START_X, 100 + (i * 150), btnW, btnH);
         }
 
-        // 左クリックされた瞬間の処理（InputManagerにお任せ！）
+        // 左クリックされた瞬間の処理
         if (input.IsLeftClicked() && isHoverIdx[i]) {
             selectedOption = i;
 
@@ -60,8 +60,8 @@ void SelectScene::Draw() const {
     DrawGraph(START_X, START_Y, Pic.GetSel(), TRUE);
 
     // 上下のラインを描画
-    DrawBox(START_X, START_Y, WIN_MAX_X, LINE_END_Y, GetColor(0, 255, 255), TRUE);
-    DrawBox(START_X, LINE_START_Y, WIN_MAX_X, WIN_MAX_Y, GetColor(0, 255, 255), TRUE);
+    DrawBox(START_X, START_Y, WIN_MAX_X, 50, Col.GetSky(), TRUE);
+    DrawBox(START_X, WIN_MAX_Y - 50, WIN_MAX_X, WIN_MAX_Y, Col.GetSky(), TRUE);
 
     // 入力した名前を表示 (g_player から取得)
     DrawFormatStringToHandle(

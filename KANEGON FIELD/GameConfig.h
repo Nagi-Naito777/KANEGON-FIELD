@@ -17,15 +17,14 @@
 #define RET_BUT_END_X 100
 #define RET_BUT_END_Y 40
 
-// 上下線のY座標の始点(下側)と終点(上側)
-#define LINE_START_Y 750
-#define LINE_END_Y 50
-
 // 自分自身の名前表示座標の原点
 #define NAME_START_Y 770
 
 // セレクト画面のボタンのX座標の開始点
 #define SELBUT_START_X 200
+
+// 最大ゲーム可能人数
+#define MEMBER_MAX 9
 
 // フォント管理クラス
 class FontManager

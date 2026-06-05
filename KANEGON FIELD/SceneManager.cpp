@@ -18,8 +18,8 @@ std::unique_ptr<IScene> SceneManager::CreateScene(SceneName name) {
     switch(name){
     case SceneName::TITLE:return std::make_unique<TitleScene>();
     case SceneName::SELECT:return std::make_unique<SelectScene>();
-    case SceneName::SETTING:return std::make_unique<SettingScene>();
-    case SceneName::BATTLE:return std::make_unique<BattleScene>();
+    case SceneName::SETTING:return std::make_unique<SettingScene>(SelectScene::Option::PVP);
+    //case SceneName::BATTLE:return std::make_unique<BattleScene>();
     default:
         return nullptr;
     }

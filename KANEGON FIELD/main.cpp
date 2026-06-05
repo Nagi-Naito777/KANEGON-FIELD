@@ -39,7 +39,8 @@
 #include "CardDatabase.h"
 
 // クラスのインスタンス化
-
+ColorManager Col;
+FontManager Font;
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     ChangeWindowMode(TRUE);
@@ -59,7 +60,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     Pic.Read();
 
     // カードCSVの読み込みとエラー処理
-    const std::string CSV_PATH = "./data/csv/CardData.csv"; // ※実際のパスに合わせてください
+    const std::string CSV_PATH = "./data/CSV/card_data.csv"; // ※実際のパスに合わせてください
     if (!CardDB.Load(CSV_PATH)) {
         // 失敗したら画面にメッセージを出して止める
         printfDx("エラー: %s が見つかりません！\n", CSV_PATH.c_str());
@@ -75,7 +76,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // 初期シーンを「タイトル」に指定してシーンマネージャーを作成
     SceneManager sceneManager(SceneName::TITLE);
 
-    while (ScreenFlip() == 0 &&			// 全背景を消す
+    while (
         ClearDrawScreen() == 0 &&		// 画面に描かれたものを消去する
         ProcessMessage() == 0 &&        // ウィンドウズのメッセージ処理
         CheckHitKey(KEY_INPUT_ESCAPE) == 0)
@@ -88,6 +89,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
         // ゲームの描画処理
         sceneManager.Draw();
+
+        // 全背景を消す
+        ScreenFlip();
     }
 
     // ゲームコンフィグ内の関数の削除
