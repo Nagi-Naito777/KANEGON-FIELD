@@ -8,6 +8,9 @@
 // プレイヤー情報のグローバル変数（以前のコードから推測）
 extern Player g_player;
 
+// シーンが切り替わっても前回の人数を記憶し続ける変数(修行モードのAI人数)
+static int s_savedMemberCount = 2;
+
 // ==========================================
 // コンストラクタ＆初期化
 // ==========================================
@@ -15,7 +18,7 @@ SettingScene::SettingScene(SelectScene::Option mode)
     : currentMode(mode)
     , selectedOption(NONE)
     , MemberCustom(false)
-    , selectedMemberCount(2)
+    , selectedMemberCount(s_savedMemberCount)
 {
     // 配列の初期化
     for (int i = 0; i < MAX; i++) { isHoverIdx[i] = false; isTeam[i] = false; }
@@ -106,9 +109,12 @@ SceneName SettingScene::Update(const InputManager& input) {
 
                                 if (input.IsLeftClicked() && isHoverIdx2[j]) {
                                     selectedMemberCount = member_num;
+                                    // 選ばれた人数を記憶用の変数にも保存する
+                                    s_savedMemberCount = member_num;
                                     MemberCustom = false;
                                 }
-                                member_num++; j++;
+                                member_num++;
+                                j++;
                             }
                         }
                     }

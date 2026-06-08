@@ -23,9 +23,6 @@
 * 　
 */
 
-
-
-
 // インクルード系統
 #include <iostream>
 #include <string>
