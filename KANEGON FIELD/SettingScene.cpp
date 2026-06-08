@@ -63,7 +63,7 @@ void SettingScene::SelectTeam(int teamId) {
         isAlreadySelected = isTeam[teamId];
     }
 
-    // PVP(個人)? TEAM_GREEN(緑チーム)までの選択状態を一旦すべてfalse(未所属)にする
+    // PVP(個人)～TEAM_GREEN(緑チーム)までの選択状態を一旦すべてfalse(未所属)にする
     for (int i = PVP; i <= TEAM_GREEN; i++) {
         isTeam[i] = false;
     }
@@ -83,7 +83,7 @@ SceneName SettingScene::Update(const InputManager& input) {
     // --- ホバー判定 ---
     for (int i = 0; i < MAX; i++) {
         if (i == RETURN) {
-            isHoverIdx[i] = input.IsMouseOver(10, 10, 100, 30);
+            isHoverIdx[i] = input.IsMouseOver(RET_BUT_X, RET_BUT_Y, RET_BUTW, RET_BUTH);
         }
         else if (i == BATTLE_START) {
             if (!MemberCustom) { isHoverIdx[i] = input.IsMouseOver(350, 550, 300, 150); }
@@ -229,8 +229,8 @@ void SettingScene::Draw() const {
     for (int i = 0; i < MAX; i++) {
         if (i == RETURN) {
             unsigned int color = isHoverIdx[i] ? Col.GetCurYel() : Col.GetWhi();
-            DrawBox(10, 10, 100, 40, color, TRUE);
-            DrawBox(9, 9, 101, 41, Col.GetBla(), FALSE);
+            DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, color, TRUE);
+            DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, Col.GetBla(), FALSE);
             DrawString(37, 17, _T("戻る"), Col.GetBla());
         }
         else if (i == BATTLE_START) {
@@ -241,14 +241,22 @@ void SettingScene::Draw() const {
             switch (currentMode) {
             case SelectScene::Option::TRANING:
                 if (i == MEMBER) {
-                    if (isHoverIdx[i]) { Pic.MouseHoverDraw(200, 251, Pic.GetAIButton()); }
-                    else { DrawGraph(200, 250, Pic.GetAIButton(), TRUE); }
+                    int men_butX = 200;
+                    int men_butY = 250;
+                    if (isHoverIdx[i]) { Pic.MouseHoverDraw(men_butX, men_butY + 1, Pic.GetAIButton()); }
+                    else { DrawGraph(men_butX, men_butY, Pic.GetAIButton(), TRUE); }
 
-                    DrawFormatStringToHandle(275, 265 + (isHoverIdx[i] ? 1 : 0), Col.GetBla(), Font.GetBig(), _T("対戦人数 : %d人"), selectedMemberCount);
+                    DrawFormatStringToHandle(275, 267 + (isHoverIdx[i] ? 1 : 0), Col.GetBla(), Font.GetBig(), _T("対戦人数 : %d人"), selectedMemberCount);
 
                     if (MemberCustom) {
-                        BlackDrawBox(0, 50, WIN_MAX_X, WIN_MAX_Y - 50);
-                        DrawBox(200, 150, 850, 525, Col.GetWhi(), TRUE);
+                        // ボックスの始点
+                        int box_x = 200;
+                        int box_y = 150;
+                        // ボックスの終点
+                        int box_ex = 850;
+                        int box_ey = 525;
+                        BlackDrawBox(START_X, START_Y + 50, WIN_MAX_X, WIN_MAX_Y - 50);
+                        DrawBox(box_x, box_y, box_ex, box_ey, Col.GetWhi(), TRUE);
 
                         int member_num = 2, j = 0;
                         for (int y = 0; y < 3; y++) {

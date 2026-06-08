@@ -2,12 +2,7 @@
 #pragma once
 #include "DxLib.h"
 #include <assert.h> // 安全チェック用
-
-//カードサイズ
-#define CARD_CELL 50
-
-//カードの合計種類数
-#define CARD_KIND 400
+#include "GameConfig.h"
 
 class Picture
 {

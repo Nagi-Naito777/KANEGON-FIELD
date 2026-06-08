@@ -1,12 +1,9 @@
 // プレイヤーの手札関係クラス
-
 #pragma once
 #include <vector>
 #include <algorithm>
 #include "Card.h"
-
-// カードの最大所持枚数
-#define CARD_MAX 18
+#include "GameConfig.h"
 
 class PlayerHand {
 private:

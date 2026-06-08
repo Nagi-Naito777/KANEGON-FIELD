@@ -29,7 +29,7 @@ SceneName SelectScene::Update(const InputManager& input) {
     for (int i = 0; i < MAX; i++) {
         // ƒ}ƒEƒX‚ªæ‚Á‚Ä‚¢‚é‚©‚Ì”»’è
         if (i == RETURN) {
-            isHoverIdx[i] = input.IsMouseOver(10, 10, 100, 30);
+            isHoverIdx[i] = input.IsMouseOver(RET_BUT_X, RET_BUT_Y, RET_BUTW, RET_BUTH);
         }
         else {
             isHoverIdx[i] = input.IsMouseOver(SELBUT_START_X, 100 + (i * 150), btnW, btnH);

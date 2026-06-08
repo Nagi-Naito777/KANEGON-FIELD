@@ -134,7 +134,6 @@
     <ClCompile Include="BattleAIManager.cpp" />
     <ClCompile Include="BattleInputManager.cpp" />
     <ClCompile Include="BattleLogicManager.cpp" />
-    <ClCompile Include="BattlePhaseManager.cpp" />
     <ClCompile Include="BattleScene.cpp" />
     <ClCompile Include="BattleUIManager.cpp" />
     <ClCompile Include="Card.cpp" />
@@ -151,9 +150,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BattleAIManager.h" />
+    <ClInclude Include="BattleData.h" />
     <ClInclude Include="BattleInputManager.h" />
     <ClInclude Include="BattleLogicManager.h" />
-    <ClInclude Include="BattlePhaseManager.h" />
     <ClInclude Include="BattleScene.h" />
     <ClInclude Include="BattleUIManager.h" />
     <ClInclude Include="Card.h" />

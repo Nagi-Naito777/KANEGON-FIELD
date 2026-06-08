@@ -17,6 +17,10 @@
 #define RET_BUT_END_X 100
 #define RET_BUT_END_Y 40
 
+// 戻るボタンの横幅と高さの定数
+#define RET_BUTW (RET_BUT_END_X - RET_BUT_X)
+#define RET_BUTH (RET_BUT_END_Y - RET_BUT_Y)
+
 // 自分自身の名前表示座標の原点
 #define NAME_START_Y 770
 
@@ -25,6 +29,17 @@
 
 // 最大ゲーム可能人数
 #define MEMBER_MAX 9
+
+//カードサイズ
+#define CARD_CELL 50
+
+//カードの合計種類数
+#define CARD_KIND 400
+
+// カードの最大所持枚数
+#define CARD_MAX 18
+
+#include "DxLib.h"
 
 // フォント管理クラス
 class FontManager

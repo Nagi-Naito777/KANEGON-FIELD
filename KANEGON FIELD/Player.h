@@ -56,7 +56,4 @@ public:
     void setMoney(int newMoney);
 };
 
-// ※今回はグローバル変数として残しますが、後々ゲームシステムクラスに
-// 持たせるのが理想的です。
 extern Player g_player;
-
