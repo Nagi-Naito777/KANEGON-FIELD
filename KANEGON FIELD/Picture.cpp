@@ -50,5 +50,12 @@ void Picture::MouseHoverDraw(int x, int y, int img) const {
 	SetDrawBright(255, 255, 255);
 }
 
+// ボタンが使えない時に色が変わる関数
+void Picture::ButtonRockDraw(int x, int y, int img) const {
+	SetDrawBright(100, 100, 100);
+	DrawGraph(x, y, img, TRUE);
+	SetDrawBright(255, 255, 255);
+}
+
 // メモリ上にPicを作成
 Picture Pic;

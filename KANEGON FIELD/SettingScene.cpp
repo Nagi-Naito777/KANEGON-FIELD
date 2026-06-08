@@ -52,13 +52,21 @@ void SettingScene::BlackDrawBox(int x, int y, int x2, int y2) const {
 }
 
 void SettingScene::SelectTeam(int teamId) {
+    // 今押されたボタンが選ばれた状態かをチェックする。
+    bool isAlreadySelected = false;
+
+    // 個人戦～緑チームまでのボタン判定をifで確認
+    if (teamId >= PVP && teamId <= TEAM_GREEN) {
+        isAlreadySelected = isTeam[teamId];
+    }
+
     // PVP(個人)? TEAM_GREEN(緑チーム)までの選択状態を一旦すべてfalse(未所属)にする
     for (int i = PVP; i <= TEAM_GREEN; i++) {
         isTeam[i] = false;
     }
 
-    // 押されたボタンの場所だけtrue(所属)にする
-    if (teamId >= PVP && teamId <= TEAM_GREEN) {
+    // もしまだ選ばれていないボタンだった場合のみtrue(所属)にする
+    if (!isAlreadySelected && teamId >= PVP && teamId <= TEAM_GREEN) {
         isTeam[teamId] = true;
     }
 }
@@ -107,15 +115,28 @@ SceneName SettingScene::Update(const InputManager& input) {
                 }
                 break;
             case SelectScene::Option::PVP:
+            {
+                // 現在どちらのモードが選ばれているかチェック
+                bool isSoloSelected = isTeam[PVP];  // 個人戦の判定
+                // チーム戦の判定
+                bool isAnyTeamSelected = isTeam[TEAM_RED] || isTeam[TEAM_BLUE] || isTeam[TEAM_YELLOW] || isTeam[TEAM_GREEN];
+
                 if (i >= TEAM_RED && i <= TEAM_GREEN) {
                     int num = i - TEAM_RED;
                     int btnY = 100 + (num * 104);
-                    isHoverIdx[i] = input.IsMouseOver(startX, btnY, btnW, btnH);
+                    // 個人戦が選ばれていない時だけクリック可能
+                    if (!isSoloSelected) {
+                        isHoverIdx[i] = input.IsMouseOver(startX, btnY, btnW, btnH);
+                    }
                 }
                 else if (i == PVP) {
-                    isHoverIdx[i] = input.IsMouseOver(50, 100, btnW, btnH);
+                    // チーム戦が選ばれていない時だけクリック可能
+                    if (!isAnyTeamSelected) {
+                        isHoverIdx[i] = input.IsMouseOver(50, 100, btnW, btnH);
+                    }
                 }
                 break;
+            }
             case SelectScene::Option::TAIMAN:
                 if (i == RANKING) { isHoverIdx[i] = input.IsMouseOver(50, 100, btnW, btnH); }
                 break;
@@ -155,7 +176,9 @@ SceneName SettingScene::Update(const InputManager& input) {
             case TEAM_YELLOW:
             case TEAM_GREEN:
                 SelectTeam(selectedOption);
-                isBattlePlayer[0] = true;
+
+                // SelectTeamの結果、そのチームに所属したならtrue、解除したならfalseを入れる
+                isBattlePlayer[0] = isTeam[selectedOption];
                 break;
 
             case RETURN:
@@ -239,15 +262,38 @@ void SettingScene::Draw() const {
                 break;
 
             case SelectScene::Option::PVP:
+            {
+                // 現在どちらのモードが選ばれているかチェック 
+                bool isSoloSelected = isTeam[PVP];
+                bool isAnyTeamSelected = isTeam[TEAM_RED] || isTeam[TEAM_BLUE] || isTeam[TEAM_YELLOW] || isTeam[TEAM_GREEN];
+                
+                // チームボタンの描画
                 if (i >= TEAM_RED && i <= TEAM_GREEN) {
                     int num = i - TEAM_RED;
                     int btnY = 100 + (num * 104);
-                    if (isHoverIdx[i]) { Pic.MouseHoverDraw(750, btnY + 1, Pic.GetTeamButton(num)); }
-                    else { DrawGraph(750, btnY, Pic.GetTeamButton(num), TRUE); }
+                    if (isSoloSelected) {
+                        // 個人戦選択中ならボタンをロック(暗い色に)する
+                        Pic.ButtonRockDraw(750, btnY, Pic.GetTeamButton(num));
+                    }
+                    else {
+                        // 通常の描画
+                        if (isHoverIdx[i]) { Pic.MouseHoverDraw(750, btnY + 1, Pic.GetTeamButton(num)); }
+                        else { DrawGraph(750, btnY, Pic.GetTeamButton(num), TRUE); }
+                    }
                 }
+                // 個人戦(PVP)のボタン描画
                 else if (i == PVP) {
-                    if (isHoverIdx[i]) { Pic.MouseHoverDraw(50, 100, Pic.GetSoloButton()); }
-                    else { DrawGraph(50, 100, Pic.GetSoloButton(), TRUE); }
+                    // 個人戦用ボタンの原点座標
+                    int solo_butX = 50;
+                    int solo_butY = 100;
+                    if (isAnyTeamSelected) {
+                        // チーム戦選択中ならボタンをロックする
+                        Pic.ButtonRockDraw(solo_butX, solo_butY, Pic.GetSoloButton());
+                    }
+                    else {
+                        if (isHoverIdx[i]) { Pic.MouseHoverDraw(solo_butX, solo_butY + 1, Pic.GetSoloButton()); }
+                        else { DrawGraph(solo_butX, solo_butY, Pic.GetSoloButton(), TRUE); }
+                    }
                 }
 
                 // 選んでいるチームの色を判定する
@@ -259,7 +305,7 @@ void SettingScene::Draw() const {
 
                 for (int j = 0; j < MEMBER_MAX; j++) {
                     if (isBattlePlayer[j]) {
-                        // j==0 (自分) のときは選んだ色。他のプレイヤーが増えた場合はとりあえず白等にする
+                        // j == 0 (自分) のときは選んだ色。他のプレイヤーが増えた場合はとりあえず白等にする
                         unsigned int drawColor = (j == 0) ? myColor : Col.GetWhi();
                         DrawPlayerTeam(g_player.getName(), 100 + (j * 40), drawColor);
                     }
@@ -269,6 +315,7 @@ void SettingScene::Draw() const {
                     }
                 }
                 break;
+            }
             }
         }
     }

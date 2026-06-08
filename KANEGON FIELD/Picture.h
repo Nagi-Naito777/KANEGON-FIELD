@@ -41,6 +41,9 @@ public:
 	// 画像の上にマウスが置かれたら色が少し灰色になる関数
 	void MouseHoverDraw(int x, int y, int img) const;
 
+	// ボタンが使えない時に色が変わる関数
+	void ButtonRockDraw(int x, int y, int img) const;
+
 	// ゲッター関数
 	int GetTit() const { return Tit; }
 	int GetTitButton() const { return Tit_Button; }
