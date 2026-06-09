@@ -7,6 +7,27 @@
 #include "BattleLogicManager.h"
 #include "BattleData.h"
 
+// コンストラクタの実装
+BattleScene::BattleScene() {
+	// 配列の初期化（ここが非常に重要です！）
+	// memsetでメモリを0で埋めることで、bool配列をすべて false にします
+	std::memset(data.isHoverIdx, 0, sizeof(data.isHoverIdx));
+	std::memset(data.isHoverCardIdx, 0, sizeof(data.isHoverCardIdx));
+	std::memset(data.isHoverPlayerIdx, 0, sizeof(data.isHoverPlayerIdx));
+
+	// データの初期設定
+	data.currentTurnIdx = 0;
+	data.currentPhase = BattlePhase::Select;
+	data.isSurrenderConfirm = false;
+	data.playerTarget = false;
+	data.targetIdx = -1;
+	data.totalPower = 0;
+}
+
+// デストラクタの実装（もしヘッダーで宣言しているなら必要です）
+BattleScene::~BattleScene() {
+}
+
 SceneName BattleScene::Update(const InputManager& input) {
 	// =============================================================
 	 // 操作プレイヤー（人間）の情報を検索・特定する
@@ -34,12 +55,11 @@ SceneName BattleScene::Update(const InputManager& input) {
 
 	// もし降参（GIVE_UP）が選択されたら、戦闘シーンを終了する
 	if (isSurrender) {
-		// ※遷移先のシーン名はご自身のゲームに合わせて変更してください（Title, Resultなど）
-		// return SceneName::Result; 
+		return SceneName::SELECT;
 	}
 
 	// AIの思考をデータに反映
-	// aiManager.Update(data);
+	aiManager.Update(data, humanIdx, isHumanTurn);
 
 	// ルールに従ってデータを更新（ダメージ計算など）
 	// logicManager.Update(data);
@@ -52,5 +72,5 @@ SceneName BattleScene::Update(const InputManager& input) {
 
 void BattleScene::Draw() const {
     // 描画はデータを見てUIマネージャーに任せる
-    //uiManager.Draw(data);
+    uiManager.Draw(data);
 }
