@@ -36,8 +36,11 @@ public:
     PlayerHand Hand;            // 手札管理パーツ
     StatusEffects Status;       // 状態異常パーツ
 
-    // コンストラクタ
+    // この行を追加（引数なしのコンストラクタ）
     Player();
+
+    // 引数付きのコンストラクタ
+    Player(std::string name, ControllerType type);
 
     // --- Getter ---
     ControllerType getControllerType() const { return controlType; }

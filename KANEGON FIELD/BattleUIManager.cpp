@@ -103,6 +103,9 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
     // 手札を取得
     const auto& hand = player.Hand.GetCards();
 
+    // ★デバッグ：画面左上に手札枚数を表示
+    DrawFormatString(0, 100, GetColor(0, 0, 0), "HandSize: %d", hand.size());
+
     // --- サイズ・レイアウト設定 ---
     const float SCALE = 1.45f;                  // 拡大倍率
     const int BASE_W = 50;                      // 元のカード幅
@@ -125,8 +128,8 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         int col = i % MAX_CARDS_PER_ROW;
         int row = i / MAX_CARDS_PER_ROW;
 
-        int x = START_X + (CARD_W + MARGIN) * col;
-        int y = START_Y + (ROW_SPACING * row);
+        int x = Start_X + (CARD_W + MARGIN) * col;
+        int y = Start_Y + (ROW_SPACING * row);
 
         // このカードが今のターンで使えるか判定
         bool isSelectable = false;

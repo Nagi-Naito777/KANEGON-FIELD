@@ -23,6 +23,9 @@ public:
 	BattleScene();
 	~BattleScene()override;
 
+	// プレイヤーを受け取る初期化関数を追加
+	void Initialize(const std::vector<Player>& initialPlayers);
+
 	// ISceneの仮想関数をオーバーライド
 	SceneName Update(const InputManager& input) override;
 	void Draw() const override;

@@ -138,6 +138,7 @@
     <ClCompile Include="BattleUIManager.cpp" />
     <ClCompile Include="Card.cpp" />
     <ClCompile Include="CardDatabase.cpp" />
+    <ClCompile Include="DamageResult.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Picture.cpp" />
@@ -157,6 +158,7 @@
     <ClInclude Include="BattleUIManager.h" />
     <ClInclude Include="Card.h" />
     <ClInclude Include="CardDatabase.h" />
+    <ClInclude Include="DamageResult.h" />
     <ClInclude Include="GameConfig.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InterfaceScene.h" />

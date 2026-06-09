@@ -1,7 +1,14 @@
 #include "Player.h"
 
-// コンストラクタ（初期ステータスの設定）
-Player::Player() : hp(40), mp(10), money(20), ID(0), team(0), controlType(ControllerType::HUMAN)
+// コンストラクタ
+Player::Player()
+    : hp(40), mp(10), money(20), ID(0), team(0), controlType(ControllerType::HUMAN), name("NoName")
+{
+}
+
+// 引数付きコンストラクタの実装
+Player::Player(std::string n, ControllerType type)
+    : hp(40), mp(10), money(20), ID(0), team(0), controlType(type), name(n)
 {
 }
 

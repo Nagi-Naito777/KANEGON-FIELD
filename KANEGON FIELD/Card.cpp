@@ -1,4 +1,5 @@
 #include "Card.h"
+#include <random>
 
 // デフォルトコンストラクタ
 Card::Card() {

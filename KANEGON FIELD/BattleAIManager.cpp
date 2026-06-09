@@ -17,7 +17,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 
 		data.selectedCards.clear();
 
-		// ★修正: 手札ベクターを PlayerHand クラスから取得
+		// 手札ベクターを PlayerHand クラスから取得
 		const auto& hand = turnPlayer.Hand.GetCards();
 
 		int bestIndex = -1;
