@@ -80,12 +80,12 @@ bool BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& 
 // UŒ‚E–hŒä‚ÌŒˆ’èƒ{ƒ^ƒ“ˆ—
 // -------------------------------------------------------------
 void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManager& input, int humanIdx, bool isHumanTurn) {
-    const int DECISION_AREA_W = 150;
-    const int DECISION_AREA_H = 40;
-    const int ATK_BTN_X = 250;
-    const int ATK_BTN_Y = 150;
-    const int DEF_BTN_X = 250;
-    const int DEF_BTN_Y = 220;
+    const int DECISION_AREA_W = 271;
+    const int DECISION_AREA_H = 325;
+    const int ATK_BTN_X = 5;
+    const int ATK_BTN_Y = 60;
+    const int DEF_BTN_X = 340;
+    const int DEF_BTN_Y = ATK_BTN_Y;
 
     Player& turnPlayer = data.Player_Turn[data.currentTurnIdx];
     const auto& turnHandVec = turnPlayer.Hand.GetCards();

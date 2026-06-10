@@ -40,7 +40,8 @@ struct BattleData {
 	std::vector<int> selectedCards;			// 選んだ手札のインデックスを順番に格納
 	std::vector<int> selectedDefenseCards;	// 防御側が選択したカードのインデックス
 	int totalPower = 0;						// 重ね掛けした合計威力
-	std::string currentAttackElement = "無";// 追加: 現在の攻撃属性
+	std::string currentAttackElement = "無";// 現在の攻撃属性
+	std::string currentDefenseElement = "無";// 現在の防御属性
 	int targetIdx;							// マウスでホバーしたり選択した相手の番号
 	bool playerTarget = false;				// プレイヤーを指定したかどうか
 
@@ -76,6 +77,7 @@ struct BattleData {
 		selectedDefenseCards.clear();
 		totalPower = 0;
 		currentAttackElement = "無";
+		currentDefenseElement = "無";
 		targetIdx = -1;
 		playerTarget = false;
 

@@ -52,10 +52,12 @@ void BattleUIManager::Draw(const BattleData& data) const {
         if (data.currentPhase == BattlePhase::Select) {
             // 攻撃選択中のカード表示
             DrawSelectedCard(data, *humanPlayer, 65.0f);
+            DrawCardSelectButton(data.isHoverIdx);
         }
         else if (data.currentPhase == BattlePhase::DefenseSelect) {
             // 防御選択中のカード表示
             DrawDefenseCards(data, *humanPlayer, humanIdx, 65.0f);
+            DrawCardSelectButton(data.isHoverIdx);
         }
     }
 
@@ -645,7 +647,21 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
         int totalDrawX = startX + 100;
         int totalDrawY = 400; // 手札の少し上の位置
 
-        DrawFormatString(totalDrawX, totalDrawY, GetColor(0, 255, 255), _T("守 %d"), data.totalPower);
+        // 合計値を見やすくするための枠組みの座標用変数
+        const int totalbox_x = 340;
+        const int totalbox_y = 395;
+        DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
+        DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
+
+        // 属性に合わせて色を変化させる
+        int totalDefCol = Col.GetBla(); // デフォルト色
+        if (data.currentDefenseElement == "炎") { totalDefCol = GetColor(255, 0, 0); }
+        else if (data.currentDefenseElement == "水") { totalDefCol = GetColor(0, 0, 255); }
+        else if (data.currentDefenseElement == "木") { totalDefCol = GetColor(0, 155, 0); }
+        else if (data.currentDefenseElement == "光") { totalDefCol = GetColor(155, 155, 0); }
+        else if (data.currentDefenseElement == "闇") { totalDefCol = GetColor(255, 100, 255); }
+
+        DrawFormatString(totalDrawX, totalDrawY, totalDefCol, _T("守 %d"), data.totalPower);
     }
 }
 
@@ -663,4 +679,22 @@ void BattleUIManager::DrawSurrenderWindow(const BattleData& data) const {
     unsigned int btnColor = data.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
     DrawBox(425, 300, 575, 350, btnColor, TRUE);
     DrawString(460, 315, "あきらめる", GetColor(255, 255, 255));
+}
+
+// カード選択決定ボタンの描画
+void BattleUIManager::DrawCardSelectButton(const bool* ishoverIdx)const {
+    const int DECISION_AREA_W = 271;
+    const int DECISION_AREA_H = 325;
+    const int ATK_BTN_X = 5;
+    const int ATK_BTN_Y = 60;
+    const int DEF_BTN_X = 340;
+    const int DEF_BTN_Y = ATK_BTN_Y;
+    SetDrawBlendMode(DX_BLENDMODE_ALPHA, 150);
+    if (ishoverIdx[BattleOption::ATTACK]) {
+        DrawBox(ATK_BTN_X, ATK_BTN_Y, ATK_BTN_X + DECISION_AREA_W, ATK_BTN_Y + DECISION_AREA_H, Col.GetWhi(), TRUE);
+    }
+    else if (ishoverIdx[BattleOption::DEFENSE]) {
+        DrawBox(DEF_BTN_X, DEF_BTN_Y, DEF_BTN_X + DECISION_AREA_W, DEF_BTN_Y + DECISION_AREA_H, Col.GetWhi(), TRUE);
+    }
+    SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 }

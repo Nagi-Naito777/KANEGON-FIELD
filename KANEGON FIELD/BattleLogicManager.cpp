@@ -136,16 +136,11 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
     TotalAttack total;
     total.power = 0;
     total.isAll = false;
+    total.type = _T("無");
 
     auto& hand = attacker.Hand.GetCards();
 
     if (data.selectedCards.empty()) return total;
-    if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
-
-    std::string baseType = hand[data.selectedCards[0]].GetType();
-    if (baseType == "") baseType = _T("無");
-
-    bool hasNonLightAddition = false;
 
     for (size_t i = 0; i < data.selectedCards.size(); ++i) {
         int index = data.selectedCards[i];
@@ -164,16 +159,23 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
             total.hitPercent = card.GetPercent();
         }
 
-        if (i > 0) {
-            std::string addType = card.GetType();
-            if (addType == "") addType = _T("無");
-            if (addType != _T("光")) {
-                hasNonLightAddition = true;
+        // ★属性の再計算ロジック
+        std::string cardType = card.GetType();
+        if (cardType == "") cardType = _T("無");
+
+        if (cardType == _T("光")) {
+            // 現在が無属性のときだけ光にする（1枚目が光の場合など）
+            // すでに炎などになっていれば上書きしない（引き継ぐ）
+            if (total.type == _T("無")) {
+                total.type = _T("光");
             }
+        }
+        else if (cardType != _T("無")) {
+            // 光・無以外の属性（炎、水、木、闇など）なら、その属性で上書きする
+            total.type = cardType;
         }
     }
 
-    total.type = (hasNonLightAddition) ? _T("無") : baseType;
     return total;
 }
 
@@ -218,19 +220,24 @@ void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::v
         return;
     }
 
-    std::string baseType = hand[data.selectedCards[0]].GetType();
-    if (baseType == "") baseType = _T("無");
+    std::string calculatedElement = _T("無"); // 初期値を「無」に設定
 
-    bool hasNonLightAddition = false;
+    for (size_t i = 0; i < data.selectedCards.size(); ++i) {
+        std::string cardType = hand[data.selectedCards[i]].GetType();
+        if (cardType == "") cardType = _T("無");
 
-    for (size_t i = 1; i < data.selectedCards.size(); ++i) {
-        std::string addType = hand[data.selectedCards[i]].GetType();
-        if (addType == "") addType = _T("無");
-
-        if (addType != _T("光")) {
-            hasNonLightAddition = true;
+        // 属性の再計算ロジック
+        if (cardType == _T("光")) {
+            // 現在が無属性のときだけ光にする
+            if (calculatedElement == _T("無")) {
+                calculatedElement = _T("光");
+            }
+        }
+        else if (cardType != _T("無")) {
+            // 光・無以外の属性なら上書きする
+            calculatedElement = cardType;
         }
     }
 
-    data.currentAttackElement = hasNonLightAddition ? _T("無") : baseType;
+    data.currentAttackElement = calculatedElement;
 }

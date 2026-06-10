@@ -56,5 +56,8 @@ private:
 
     // 降参処理表示用関数
     void DrawSurrenderWindow(const BattleData& data)const;
+
+    // カード選択決定ボタンの描画(名前の下に薄い四角を表示するだけ)
+    void DrawCardSelectButton(const bool* ishoverIdx)const;
 };
 
