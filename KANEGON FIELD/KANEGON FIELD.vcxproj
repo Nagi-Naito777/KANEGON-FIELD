@@ -148,11 +148,11 @@
     <ClCompile Include="Picture.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="PlayerHand.cpp" />
+    <ClCompile Include="RankedLobbyScene.cpp" />
     <ClCompile Include="SceneManager.cpp" />
     <ClCompile Include="SelectScene.cpp" />
-    <ClCompile Include="SettingScene.cpp" />
     <ClCompile Include="TitleScene.cpp" />
-    <ClCompile Include="TraningLobbyScene.cpp" />
+    <ClCompile Include="TrainingLobbyScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BaseLobbyScene.h" />
@@ -174,11 +174,11 @@
     <ClInclude Include="Picture.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="PlayerHand.h" />
+    <ClInclude Include="RankedLobbyScene.h" />
     <ClInclude Include="SceneManager.h" />
     <ClInclude Include="SelectScene.h" />
-    <ClInclude Include="SettingScene.h" />
     <ClInclude Include="TitleScene.h" />
-    <ClInclude Include="TraningLobbyScene.h" />
+    <ClInclude Include="TrainingLobbyScene.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

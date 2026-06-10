@@ -3,7 +3,13 @@
 // 各シーンのヘッダ
 #include "TitleScene.h"
 #include "SelectScene.h"
-#include "SettingScene.h"
+
+// 新しくしたSettingSceneの拡張シーン
+#include "BaseLobbyScene.h" 
+#include "TrainingLobbyScene.h"
+#include "BrawlLobbyScene.h"
+#include "RankedLobbyScene.h"
+
 #include "BattleScene.h"
 
 // コンストラクタ
@@ -18,7 +24,18 @@ std::unique_ptr<IScene> SceneManager::CreateScene(SceneName name) {
     switch(name){
     case SceneName::TITLE:return std::make_unique<TitleScene>();
     case SceneName::SELECT:return std::make_unique<SelectScene>();
-    case SceneName::SETTING:return std::make_unique<SettingScene>(g_selectedMode);
+    case SceneName::SETTING:
+        // 【変更点①】選ばれたモードに合わせて、作る「子クラス」を変える！
+        if (g_selectedMode == SelectScene::Option::TRANING) {
+            return std::make_unique<TrainingLobbyScene>();
+        }
+        else if (g_selectedMode == SelectScene::Option::PVP) {
+            return std::make_unique<BrawlLobbyScene>();
+        }
+        else {
+            // 真剣勝負モード用（今はまだ無いので一旦修行を入れておくか、後で作る）
+            return std::make_unique<RankedLobbyScene>();
+        }
     case SceneName::BATTLE:return std::make_unique<BattleScene>();
     default:
         return nullptr;
@@ -40,10 +57,11 @@ void SceneManager::Update(const InputManager& input) {
 
         // 設定画面からバトル画面へ移動するとき、プレイヤー情報を抜き出す
         if (m_currentName == SceneName::SETTING && nextName == SceneName::BATTLE) {
-            auto* settingScene = dynamic_cast<SettingScene*>(m_currentScene.get());
-            if (settingScene) {
-                // ※ SettingSceneに用意したゲッターからメンバー変数を取得
-                carryOverPlayers = settingScene->GetBattlePlayers();
+            // 【変更点②】SettingScene ではなく、親の BaseLobbyScene にキャストする！
+            auto* lobbyScene = dynamic_cast<BaseLobbyScene*>(m_currentScene.get());
+            if (lobbyScene) {
+                // 子クラスが修行だろうが乱闘だろうが、親の機能を使ってデータを取り出せる
+                carryOverPlayers = lobbyScene->GetBattlePlayers();
             }
         }
 
