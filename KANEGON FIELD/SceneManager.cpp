@@ -25,7 +25,7 @@ std::unique_ptr<IScene> SceneManager::CreateScene(SceneName name) {
     case SceneName::TITLE:return std::make_unique<TitleScene>();
     case SceneName::SELECT:return std::make_unique<SelectScene>();
     case SceneName::SETTING:
-        // 【変更点①】選ばれたモードに合わせて、作る「子クラス」を変える！
+        // 選ばれたモードに合わせて、作る「子クラス」を変える！
         if (g_selectedMode == SelectScene::Option::TRANING) {
             return std::make_unique<TrainingLobbyScene>();
         }
@@ -33,7 +33,6 @@ std::unique_ptr<IScene> SceneManager::CreateScene(SceneName name) {
             return std::make_unique<BrawlLobbyScene>();
         }
         else {
-            // 真剣勝負モード用（今はまだ無いので一旦修行を入れておくか、後で作る）
             return std::make_unique<RankedLobbyScene>();
         }
     case SceneName::BATTLE:return std::make_unique<BattleScene>();

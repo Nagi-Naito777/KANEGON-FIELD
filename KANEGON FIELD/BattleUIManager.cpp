@@ -8,13 +8,23 @@ extern Picture Pic;
 extern FontManager Font;
 
 void BattleUIManager::Draw(const BattleData& data) const {
-    // 【追加】プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
+    // プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
     if (data.Player_Turn.empty()) {
         return;
     }
 
     //　背景画像の描画
     DrawGraph(START_X, START_Y, Pic.GetBat(), TRUE);
+
+    // 上下のラインを描画
+    DrawBox(START_X, START_Y, WIN_MAX_X, 50, Col.GetSky(), TRUE);
+    DrawBox(START_X, WIN_MAX_Y - 50, WIN_MAX_X, WIN_MAX_Y, Col.GetSky(), TRUE);
+
+    // 戻るボタンの描画
+    unsigned int color = data.isHoverIdx[BattleOption::RETURN] ? Col.GetCurYel() : Col.GetWhi();
+    DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, color, TRUE);
+    DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, Col.GetBla(), FALSE);
+    DrawString(37, 17, _T("戻る"), Col.GetBla());
 
     // プレイヤー一覧（ステータス）を描画
     DrawPlayerStatus(data, data.isHoverPlayerIdx);
@@ -111,7 +121,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
     // 手札を取得
     const auto& hand = player.Hand.GetCards();
 
-    // ★デバッグ：画面左上に手札枚数を表示
+    // デバッグ：画面左上に手札枚数を表示
     DrawFormatString(0, 100, GetColor(0, 0, 0), "HandSize: %d", hand.size());
 
     // --- サイズ・レイアウト設定 ---
@@ -640,16 +650,17 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
 }
 
 void BattleUIManager::DrawSurrenderWindow(const BattleData& data) const {
-        SetDrawBlendMode(DX_BLENDMODE_ALPHA, 120);
-        DrawBox(0, 50, 1000, 750, GetColor(0, 0, 0), TRUE);
-        SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 
-        DrawBox(300, 200, 700, 400, GetColor(255, 255, 255), TRUE);
-        DrawBox(300, 200, 700, 400, GetColor(0, 0, 0), FALSE);
+    SetDrawBlendMode(DX_BLENDMODE_ALPHA, 120);
+    DrawBox(0, 50, 1000, 750, GetColor(0, 0, 0), TRUE);
+    SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 
-        DrawString(415, 240, "本当に降参しますか？", GetColor(0, 0, 0));
+    DrawBox(300, 200, 700, 400, GetColor(255, 255, 255), TRUE);
+    DrawBox(300, 200, 700, 400, GetColor(0, 0, 0), FALSE);
 
-        unsigned int btnColor = data.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
-        DrawBox(425, 300, 575, 350, btnColor, TRUE);
-        DrawString(460, 315, "あきらめる", GetColor(255, 255, 255));
+    DrawString(415, 240, "本当に降参しますか？", GetColor(0, 0, 0));
+
+    unsigned int btnColor = data.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
+    DrawBox(425, 300, 575, 350, btnColor, TRUE);
+    DrawString(460, 315, "あきらめる", GetColor(255, 255, 255));
 }

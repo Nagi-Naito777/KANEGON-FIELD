@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#include <string>
+#include <algorithm>
 #include "GameConfig.h"
 #include "Player.h"
 
@@ -51,4 +53,39 @@ struct BattleData {
 	bool isHoverIdx[MAX];					// 各ボタンの上にマウスがあるか
 	bool isHoverCardIdx[CARD_MAX];			// カード枠の上にマウスがあるか
 	bool isHoverPlayerIdx[MEMBER_MAX];		// どのプレイヤー枠の上にマウスがあるか
+
+	// データを初期状態に戻すための関数
+	void Clear() {
+		// --- 配列のリセット ---
+		std::fill(std::begin(isHoverIdx), std::end(isHoverIdx), false);
+		std::fill(std::begin(isHoverCardIdx), std::end(isHoverCardIdx), false);
+		std::fill(std::begin(isHoverPlayerIdx), std::end(isHoverPlayerIdx), false);
+
+		// --- 進行・状態管理のリセット ---
+		currentPhase = BattlePhase::Select;
+		currentTurnIdx = 0;
+		isSurrenderConfirm = false;
+
+		// --- 演出・タイマーのリセット ---
+		revealIndex = 0;
+		animationTimer = 0;
+
+		// --- カード・数値関連のリセット ---
+		selectCard = -1;
+		selectedCards.clear();
+		selectedDefenseCards.clear();
+		totalPower = 0;
+		currentAttackElement = "無";
+		targetIdx = -1;
+		playerTarget = false;
+
+		// --- UI・操作フラグのリセット ---
+		selectedOption = BattleOption::NONE;
+		selectPlayer = -1;
+		hoveredCardIdx = -1;
+
+		// ※ Player_Turn は Initialize で再代入されるため、
+		// ここで clear しても問題ありません。
+		Player_Turn.clear();
+	}
 };

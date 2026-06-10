@@ -12,7 +12,7 @@
 // コンストラクタの実装
 BattleScene::BattleScene() {
 	// 配列の初期化
-	// bool 型や int 型の配列だけを安全にリセットできます
+	// ※fillを使えばアドレス指定で配列を初期化できる
 	std::fill(std::begin(data.isHoverIdx), std::end(data.isHoverIdx), false);
 	std::fill(std::begin(data.isHoverCardIdx), std::end(data.isHoverCardIdx), false);
 	std::fill(std::begin(data.isHoverPlayerIdx), std::end(data.isHoverPlayerIdx), false);
@@ -20,12 +20,15 @@ BattleScene::BattleScene() {
 	data.currentTurnIdx = 0;
 }
 
-// デストラクタの実装（もしヘッダーで宣言しているなら必要です）
+// デストラクタの実装(実際はnewとか使った場合に使用する様子)
 BattleScene::~BattleScene() {
 }
 
 void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
-	// 【修正】外部からちゃんとプレイヤーが渡された時だけ上書きする
+	// 完全初期化
+	data.Clear();
+
+	// 外部からちゃんとプレイヤーが渡された時だけ上書きする
 	if (!initialPlayers.empty()) {
 		data.Player_Turn = initialPlayers;
 	}
@@ -64,7 +67,7 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 			std::string candidate = aiNames[aiNameIdx];
 			aiNameIdx++;
 
-			// g_player と名前が被らないようにするロジック
+			// g_player(ゲームプレイヤー)と名前が被らないようにするロジック
 			if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
 				candidate = aiNames[aiNameIdx];
 				aiNameIdx++;
@@ -73,10 +76,10 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 		}
 	}
 
-	// 3. ターン順をシャッフル
+	// ターン順をシャッフル
 	std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
 
-	// 4. カード配布（ここで初期カードが配られるため、画面に描画されるようになります）
+	// カード配布（ここで初期カードが配られるため、画面に描画されるようになります）
 	for (auto& player : data.Player_Turn) {
 		for (int i = 0; i < 9; ++i) {
 			player.Hand.Add(CardDB.GetRandomCard());
@@ -84,7 +87,7 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 		player.Hand.Sort();
 	}
 
-	// 5. 内部状態のリセット
+	// 内部状態のリセット
 	data.currentTurnIdx = 0;
 	data.targetIdx = -1;
 	data.playerTarget = false;
