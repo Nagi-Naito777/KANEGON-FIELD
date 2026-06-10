@@ -18,12 +18,6 @@ BattleScene::BattleScene() {
 	std::fill(std::begin(data.isHoverPlayerIdx), std::end(data.isHoverPlayerIdx), false);
 
 	data.currentTurnIdx = 0;
-	// 【クラッシュを防ぐために、名前を空文字で明示的に初期化】
-	if (data.Player_Turn.empty()) {
-		// コンストラクタで一気に初期化できるので、後からセッターを呼ばなくて良い！
-		data.Player_Turn.emplace_back("TestPlayer", ControllerType::HUMAN);
-		data.Player_Turn.emplace_back("Enemy", ControllerType::AI);
-	}
 }
 
 // デストラクタの実装（もしヘッダーで宣言しているなら必要です）
@@ -31,8 +25,10 @@ BattleScene::~BattleScene() {
 }
 
 void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
-	// データのセットアップ
-	data.Player_Turn = initialPlayers;
+	// 【修正】外部からちゃんとプレイヤーが渡された時だけ上書きする
+	if (!initialPlayers.empty()) {
+		data.Player_Turn = initialPlayers;
+	}
 
 	// 乱数エンジンのセットアップ
 	std::random_device seed_gen;

@@ -36,16 +36,25 @@ void BattleLogicManager::Update(BattleData& data) {
             if (data.currentPhase == BattlePhase::Effect) {
                 // --- ダメージ計算の実行 ---
                 Player& attacker = data.Player_Turn[data.currentTurnIdx];
-                Player& target = data.Player_Turn[data.targetIdx];
+                Player* target = nullptr; // ポインタで保持する
 
+                if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
+                    target = &data.Player_Turn[data.targetIdx];
+                }
+
+                // 攻撃計算
                 TotalAttack attackData = CalculateTotalAttack(data, attacker);
 
                 Card* defenseCard = nullptr;
-                if (!data.selectedDefenseCards.empty() && data.selectedDefenseCards[0] < target.Hand.GetCount()) {
-                    defenseCard = const_cast<Card*>(&target.Hand.GetCards()[data.selectedDefenseCards[0]]);
+                // target が存在する場合のみ防御カードを処理
+                if (target && !data.selectedDefenseCards.empty() && data.selectedDefenseCards[0] < target->Hand.GetCount()) {
+                    defenseCard = const_cast<Card*>(&target->Hand.GetCards()[data.selectedDefenseCards[0]]);
                 }
 
-                ResolveDamage(data, target, attackData, defenseCard);
+                // ResolveDamage も target がいる場合のみ、あるいはポインタ渡しに変更する
+                if (target) {
+                    ResolveDamage(data, *target, attackData, defenseCard);
+                }
 
                 // 計算が終わったらダメージ演出フェーズへ
                 data.currentPhase = BattlePhase::Damage;
@@ -68,7 +77,7 @@ void BattleLogicManager::Update(BattleData& data) {
                     target.Hand.Remove(idx);
                 }
 
-                // ★変更部分：CardDB.GetRandomCard() を呼び出すようにする
+                // CardDB.GetRandomCard() を呼び出すようにする
                 // ドロー処理（上限まで引く）
                 while (attacker.Hand.GetCount() < CARD_MAX) {
                     attacker.Hand.Add(CardDB.GetRandomCard());

@@ -38,7 +38,7 @@ public:
     void Draw() const override;
 
     // バトルに参加するプレイヤーリストを外部(BattleScene等)へ渡す関数
-    const std::vector<Player>& getBattlePlayers() const { return BattlePlayer; }
+    const std::vector<Player>& GetBattlePlayers() const { return BattlePlayer; }
 
 private:
     // --- 内部処理用のヘルパー関数  ---

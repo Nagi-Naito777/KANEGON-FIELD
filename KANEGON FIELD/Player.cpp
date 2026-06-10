@@ -2,7 +2,7 @@
 
 // コンストラクタ
 Player::Player()
-    : hp(40), mp(10), money(20), ID(0), team(0), controlType(ControllerType::HUMAN), name("NoName")
+    : hp(40), mp(10), money(20), ID(0), team(0), controlType(ControllerType::HUMAN), name("")
 {
 }
 

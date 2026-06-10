@@ -131,16 +131,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BaseLobbyScene.cpp" />
     <ClCompile Include="BattleAIManager.cpp" />
     <ClCompile Include="BattleInputManager.cpp" />
     <ClCompile Include="BattleLogicManager.cpp" />
     <ClCompile Include="BattleScene.cpp" />
     <ClCompile Include="BattleUIManager.cpp" />
+    <ClCompile Include="BrawlLobbyScene.cpp" />
     <ClCompile Include="Card.cpp" />
     <ClCompile Include="CardDatabase.cpp" />
     <ClCompile Include="DamageResult.cpp" />
+    <ClCompile Include="GameContext.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="NetworkManager.cpp" />
     <ClCompile Include="Picture.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="PlayerHand.cpp" />
@@ -148,20 +152,25 @@
     <ClCompile Include="SelectScene.cpp" />
     <ClCompile Include="SettingScene.cpp" />
     <ClCompile Include="TitleScene.cpp" />
+    <ClCompile Include="TraningLobbyScene.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BaseLobbyScene.h" />
     <ClInclude Include="BattleAIManager.h" />
     <ClInclude Include="BattleData.h" />
     <ClInclude Include="BattleInputManager.h" />
     <ClInclude Include="BattleLogicManager.h" />
     <ClInclude Include="BattleScene.h" />
     <ClInclude Include="BattleUIManager.h" />
+    <ClInclude Include="BrawlLobbyScene.h" />
     <ClInclude Include="Card.h" />
     <ClInclude Include="CardDatabase.h" />
     <ClInclude Include="DamageResult.h" />
     <ClInclude Include="GameConfig.h" />
+    <ClInclude Include="GameContext.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InterfaceScene.h" />
+    <ClInclude Include="NetworkManager.h" />
     <ClInclude Include="Picture.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="PlayerHand.h" />
@@ -169,6 +178,7 @@
     <ClInclude Include="SelectScene.h" />
     <ClInclude Include="SettingScene.h" />
     <ClInclude Include="TitleScene.h" />
+    <ClInclude Include="TraningLobbyScene.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

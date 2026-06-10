@@ -8,6 +8,11 @@ extern Picture Pic;
 extern FontManager Font;
 
 void BattleUIManager::Draw(const BattleData& data) const {
+    // 【追加】プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
+    if (data.Player_Turn.empty()) {
+        return;
+    }
+
     // プレイヤー一覧（ステータス）を描画
     DrawPlayerStatus(data, data.isHoverPlayerIdx);
 
