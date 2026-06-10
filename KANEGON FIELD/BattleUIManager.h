@@ -53,5 +53,8 @@ private:
     // 防御側のカード表示
     void DrawDefenseCards(const BattleData& data, 
         const Player& player, int humanIdx, float currentYOffset)const;
+
+    // 降参処理表示用関数
+    void DrawSurrenderWindow(const BattleData& data)const;
 };
 

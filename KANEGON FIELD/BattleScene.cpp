@@ -65,7 +65,6 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 			aiNameIdx++;
 
 			// g_player と名前が被らないようにするロジック
-			// (※将来的にこの g_player は引数で渡す形にするとより安全です)
 			if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
 				candidate = aiNames[aiNameIdx];
 				aiNameIdx++;

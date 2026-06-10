@@ -13,6 +13,9 @@ void BattleUIManager::Draw(const BattleData& data) const {
         return;
     }
 
+    //　背景画像の描画
+    DrawGraph(START_X, START_Y, Pic.GetBat(), TRUE);
+
     // プレイヤー一覧（ステータス）を描画
     DrawPlayerStatus(data, data.isHoverPlayerIdx);
 
@@ -38,17 +41,17 @@ void BattleUIManager::Draw(const BattleData& data) const {
         // フェーズごとの選択UI描画
         if (data.currentPhase == BattlePhase::Select) {
             // 攻撃選択中のカード表示
-            DrawSelectedCard(data, *humanPlayer, 0.0f);
+            DrawSelectedCard(data, *humanPlayer, 65.0f);
         }
         else if (data.currentPhase == BattlePhase::DefenseSelect) {
             // 防御選択中のカード表示
-            DrawDefenseCards(data, *humanPlayer, humanIdx, 0.0f);
+            DrawDefenseCards(data, *humanPlayer, humanIdx, 65.0f);
         }
     }
 
     // 降参確認ウィンドウ（もしあれば）
     if (data.isSurrenderConfirm) {
-        // DrawSurrenderWindow(data); // 必要に応じて実装
+        DrawSurrenderWindow(data);
     }
 }
 
@@ -75,7 +78,7 @@ void BattleUIManager::DrawPlayerStatus(const BattleData& data, const bool* isHov
 
         DrawCircle(startX, currentY, Cir_r, Col.GetBla(), FALSE);
         DrawCircle(startX + 275, currentY, Cir_r, Col.GetBla(), FALSE);
-        DrawBox(startX, currentY - 14, startX + 275, currentY + 16, Col.GetBla(), FALSE);
+        DrawBox(startX, currentY - 15, startX + 275, currentY + 16, Col.GetBla(), FALSE);
 
         // 名前UIの背景色の描画
         DrawCircle(startX, currentY, Cir_r - 1, bgColor, TRUE);
@@ -448,7 +451,7 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
 }
 
 // BattleInput がクリック判定に使うための関数
-Rect BattleUIManager::GetHandCardRect(int handIndex) const const {
+Rect BattleUIManager::GetHandCardRect(int handIndex) const {
     static constexpr float CARD_SCALE = 1.45f;
     static constexpr int BASE_CARD_W = 50;
     static constexpr int BASE_CARD_H = 50;
@@ -634,4 +637,19 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
 
         DrawFormatString(totalDrawX, totalDrawY, GetColor(0, 255, 255), _T("守 %d"), data.totalPower);
     }
+}
+
+void BattleUIManager::DrawSurrenderWindow(const BattleData& data) const {
+        SetDrawBlendMode(DX_BLENDMODE_ALPHA, 120);
+        DrawBox(0, 50, 1000, 750, GetColor(0, 0, 0), TRUE);
+        SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
+
+        DrawBox(300, 200, 700, 400, GetColor(255, 255, 255), TRUE);
+        DrawBox(300, 200, 700, 400, GetColor(0, 0, 0), FALSE);
+
+        DrawString(415, 240, "本当に降参しますか？", GetColor(0, 0, 0));
+
+        unsigned int btnColor = data.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
+        DrawBox(425, 300, 575, 350, btnColor, TRUE);
+        DrawString(460, 315, "あきらめる", GetColor(255, 255, 255));
 }
