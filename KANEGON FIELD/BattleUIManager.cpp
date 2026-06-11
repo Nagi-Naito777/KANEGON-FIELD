@@ -49,15 +49,20 @@ void BattleUIManager::Draw(const BattleData& data) const {
         DrawPlayerHand(data, *humanPlayer, data.hoveredCardIdx, data.isHoverCardIdx);
 
         // フェーズごとの選択UI描画
-        if (data.currentPhase == BattlePhase::Select) {
+        if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::Damage) {
             // 攻撃選択中のカード表示
             DrawSelectedCard(data, *humanPlayer, data.currentYOffset);
-            DrawCardSelectButton(data.isHoverIdx);
+
+            // 決定ボタンはセレクトフェーズ中のみ
+            if (data.currentPhase == BattlePhase::Select) {
+                DrawCardSelectButton(data.isHoverIdx);
+            }
         }
-        else if (data.currentPhase == BattlePhase::DefenseSelect) {
+
+        // 防御側も同様に、ダメージ計算中も表示したい
+        if (data.currentPhase == BattlePhase::DefenseSelect || data.currentPhase == BattlePhase::Damage) {
             // 防御選択中のカード表示
             DrawDefenseCards(data, *humanPlayer, humanIdx, data.currentYOffset);
-            DrawCardSelectButton(data.isHoverIdx);
         }
     }
 

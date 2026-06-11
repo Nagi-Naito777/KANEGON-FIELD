@@ -51,7 +51,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 			// 生きている敵（自分以外）からランダムにターゲットを選ぶ
 			std::vector<int> aliveEnemies;
 			for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-				// ★修正: Status.dead を参照して気絶判定
+				// Status.dead を参照して気絶判定
 				if (i != data.currentTurnIdx && !data.Player_Turn[i].Status.dead) {
 					aliveEnemies.push_back(i);
 				}
