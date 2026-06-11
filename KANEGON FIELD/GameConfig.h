@@ -84,6 +84,7 @@ private:
     int m_whi;    // 白
     int m_gra;    // 灰色
     int m_curyel; // カーソルが重なった時の黄色
+    int m_boxyel; // テキストボックスUIの背景の黄色
     int m_sky;    // 水色
 public:
     // コンストラクタ
@@ -96,6 +97,7 @@ public:
         , m_whi(0)
         , m_gra(0)
         , m_curyel(0)
+        , m_boxyel(0)
         , m_sky(0)
     {}
 
@@ -109,6 +111,7 @@ public:
         m_whi = GetColor(255, 255, 255);// 白
         m_gra = GetColor(128, 128, 128);// 灰色
         m_curyel = GetColor(255, 255, 100);
+        m_boxyel = GetColor(255, 255, 200);
         m_sky = GetColor(0, 255, 255);
     }
 
@@ -121,6 +124,7 @@ public:
     int GetWhi() const { return m_whi; }
     int GetGra() const { return m_gra; }
     int GetCurYel()const { return m_curyel; }
+    int GetBoxYel()const { return m_boxyel; }
     int GetSky() const { return m_sky; }
 };
 

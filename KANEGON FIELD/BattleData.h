@@ -34,6 +34,7 @@ struct BattleData {
 	// --- 演出・アニメーション管理 ---
 	int revealIndex = 0;					// カード公開演出用のインデックス
 	int animationTimer = 0;					// アニメーション用のタイマー
+	float currentYOffset = 65.0f;
 
 	// --- カード選択・攻撃/防御の計算 ---
 	int selectCard = -1;					// 現在選ばれてるカード

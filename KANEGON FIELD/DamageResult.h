@@ -13,6 +13,12 @@ struct TotalAttack {
     bool isAll = false;     // 全体攻撃フラグ
 };
 
+struct TotalDefense {
+    int power = 0;          // 合計防御力
+    std::string type = "";  // 最終的な防御属性
+    bool isActive = false;  // 防御カードが出されているか
+};
+
 struct DamageResult {
     int finalDamage = 0;         // 最終的に受けるダメージ量
     bool isHit = true;           // 命中したかどうか（Missならfalse）
@@ -30,5 +36,5 @@ public:
     static bool IsValidGuard(const std::string& atkAttr, const std::string& defAttr);
 
     // 計算結果だけを算出する関数
-    static DamageResult CalculateDamage(const TotalAttack& attack, const Card* defenseCard = nullptr);
+    static DamageResult CalculateDamage(const TotalAttack& attack, const TotalDefense& defense);
 };

@@ -20,8 +20,10 @@ bool DamageResolver::IsValidGuard(const std::string& atkAttr, const std::string&
 }
 
 // 計算結果だけを算出する関数
-DamageResult DamageResolver::CalculateDamage(const TotalAttack& attack, const Card* defenseCard) {
+DamageResult DamageResolver::CalculateDamage(const TotalAttack& attack, const TotalDefense& defense) {
     DamageResult result;
+    result.isHit = true;
+    result.isInstantDeath = false;
 
     // 全体攻撃(All)の命中判定
     if (attack.isAll) {
@@ -38,16 +40,17 @@ DamageResult DamageResolver::CalculateDamage(const TotalAttack& attack, const Ca
     // 基本ダメージ量
     result.finalDamage = attack.power;
 
-    // 防御カードの適用
-    if (defenseCard != nullptr) {
-        if (IsValidGuard(attack.type, defenseCard->GetType())) {
-            // 防御成立
-            result.isGuardSuccess = true;
-            result.finalDamage -= defenseCard->GetPower();
+    // --- 防御判定（TotalDefenseを使用） ---
+    if (defense.isActive) {
+        // 合計された属性同士で相性チェック
+        if (IsValidGuard(attack.type, defense.type)) {
+            // 防御成立：合計防御力を引く
+            // result.isGuardSuccess = true; // 構造体にフラグがある場合
+            result.finalDamage -= defense.power;
         }
         else {
-            // 防御不成立（相性悪や、光属性に他属性でガードした場合）
-            result.isGuardSuccess = false;
+            // 防御不成立（相性不良など）
+            // result.isGuardSuccess = false;
         }
     }
 

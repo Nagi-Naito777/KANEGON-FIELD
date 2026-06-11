@@ -21,6 +21,14 @@ void PlayerHand::Sort() {
     if (hand.empty()) return;
 
     std::sort(hand.begin(), hand.end(), [](const Card& a, const Card& b) {
+        // --- 奇跡カードを末尾に送る ---
+        bool aIsMiracle = (a.GetCategory() == CardCategory::Magic);
+        bool bIsMiracle = (b.GetCategory() == CardCategory::Magic);
+
+        if (aIsMiracle != bIsMiracle) {
+            return bIsMiracle; // bが奇跡ならtrue (aの方が前)、aが奇跡ならfalse (bの方が前)
+        }
+
         // カテゴリで並び替え
         if (a.GetCategory() != b.GetCategory()) {
             return a.GetCategory() < b.GetCategory();

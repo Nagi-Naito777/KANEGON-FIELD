@@ -1,8 +1,13 @@
 #include "BattleLogicManager.h"
 #include "CardDatabase.h"
+#include "Player.h"
 #include <algorithm> // ソート用
 
 void BattleLogicManager::Update(BattleData& data) {
+
+    // カード表示のアニメーション処理
+    UpdateCardAnimation(data);
+
     // =============================================================
     // Reveal（公開演出）フェーズの進行
     // =============================================================
@@ -45,15 +50,27 @@ void BattleLogicManager::Update(BattleData& data) {
                 // 攻撃計算
                 TotalAttack attackData = CalculateTotalAttack(data, attacker);
 
-                Card* defenseCard = nullptr;
-                // target が存在する場合のみ防御カードを処理
-                if (target && !data.selectedDefenseCards.empty() && data.selectedDefenseCards[0] < target->Hand.GetCount()) {
-                    defenseCard = const_cast<Card*>(&target->Hand.GetCards()[data.selectedDefenseCards[0]]);
+                // 防御計算
+                TotalDefense defenseData;
+                if (target != nullptr && !data.selectedDefenseCards.empty()) {
+                    defenseData.isActive = true;
+
+                    // 全手札のリストを取得
+                    const std::vector<Card>& cards = target->Hand.GetCards();
+
+                    // 選択されたインデックスを使って、特定のカードを参照する
+                    // インデックスの範囲外アクセスを防ぐため、念のためサイズチェック
+                    int index = data.selectedDefenseCards[0];
+                    if (index >= 0 && index < (int)cards.size()) {
+                        const Card& defCard = cards[index];
+                        defenseData.power = defCard.GetPower();
+                        defenseData.type = defCard.GetType();
+                    }
                 }
 
-                // ResolveDamage も target がいる場合のみ、あるいはポインタ渡しに変更する
-                if (target) {
-                    ResolveDamage(data, *target, attackData, defenseCard);
+                // ダメージ適用（ターゲットがいる場合のみ）
+                if (target != nullptr) {
+                    ResolveDamage(data, *target, attackData, defenseData);
                 }
 
                 // 計算が終わったらダメージ演出フェーズへ
@@ -63,41 +80,119 @@ void BattleLogicManager::Update(BattleData& data) {
             else if (data.currentPhase == BattlePhase::Damage) {
                 // --- 使ったカードの破棄とドロー処理 ---
                 Player& attacker = data.Player_Turn[data.currentTurnIdx];
-                Player& target = data.Player_Turn[data.targetIdx];
 
-                // 攻撃側のカード破棄
-                std::sort(data.selectedCards.rbegin(), data.selectedCards.rend());
+                // 使用された奇跡カードの枚数をカウントする
+                int miracleUsageCount = 0;
                 for (int idx : data.selectedCards) {
-                    attacker.Hand.Remove(idx);
-                }
-
-                // 防御側のカード破棄
-                std::sort(data.selectedDefenseCards.rbegin(), data.selectedDefenseCards.rend());
-                for (int idx : data.selectedDefenseCards) {
-                    target.Hand.Remove(idx);
-                }
-
-                // CardDB.GetRandomCard() を呼び出すようにする
-                // ドロー処理（上限まで引く）
-                while (attacker.Hand.GetCount() < CARD_MAX) {
-                    attacker.Hand.Add(CardDB.GetRandomCard());
-                }
-
-                if (data.targetIdx != -1 && !target.Status.dead) {
-                    while (target.Hand.GetCount() < CARD_MAX) {
-                        target.Hand.Add(CardDB.GetRandomCard());
+                    // インデックスの範囲チェックをしてからカテゴリを確認
+                    if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
+                        if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                            miracleUsageCount++;
+                        }
                     }
                 }
 
-                // 死亡判定
-                if (data.Player_Turn[data.targetIdx].Status.dead) {
-                    RemovePlayer(data, data.targetIdx);
+                // 攻撃側のカード破棄
+                std::sort(data.selectedCards.rbegin(), data.selectedCards.rend());
+                
+                int removedCount = 0; // 破棄した枚数
+                for (int idx : data.selectedCards) {
+                    const Card& card = attacker.Hand.GetCards()[idx];
+                    // 奇跡(Magic)以外なら破棄
+                    if (card.GetCategory() != CardCategory::Magic) {
+                        attacker.Hand.Remove(idx);
+                        removedCount++;
+                    }
                 }
 
+                // ドロー処理（破棄した分 ＋ 奇跡使用分）
+                int totalDraw = removedCount + miracleUsageCount;
+                for (int i = 0; i < totalDraw; ++i) {
+                    attacker.Hand.Add(CardDB.GetRandomCard());
+                }
+
+                // 手札の並び替え（奇跡カードを後ろにするためのソート）
+                attacker.Hand.Sort();
+
+                // ターゲットが存在する場合のみ防御側の処理を行う
+                if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
+                    Player& target = data.Player_Turn[data.targetIdx];
+
+                    // 防御側も同様に奇跡使用枚数をカウント
+                    int defMiracleCount = 0;
+                    for (int idx : data.selectedDefenseCards) {
+                        if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
+                            if (target.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                                defMiracleCount++;
+                            }
+                        }
+                    }
+
+                    // 防御側のカード破棄(防御カードも同様に奇跡カード以外を削除)
+                    std::sort(data.selectedDefenseCards.rbegin(), data.selectedDefenseCards.rend());
+                    int defRemovedCount = 0;
+                    for (int idx : data.selectedDefenseCards) {
+                        const Card& card = target.Hand.GetCards()[idx];
+                        if (card.GetCategory() != CardCategory::Magic) {
+                            target.Hand.Remove(idx);
+                            defRemovedCount++;
+                        }
+                    }
+
+                    // 防御側のドロー処理
+                    if (!target.Status.dead) {
+                        int defTotalDraw = defRemovedCount + defMiracleCount;
+                        for (int i = 0; i < defTotalDraw; ++i) {
+                            target.Hand.Add(CardDB.GetRandomCard());
+                        }
+                        target.Hand.Sort(); // 防御側も並び替え処理を置く
+                    }
+
+                    // 死亡判定
+                    if (target.Status.dead) {
+                        RemovePlayer(data, data.targetIdx);
+                    }
+                }
+
+                // --- ステートのリセット（重要） ---
+                data.selectedCards.clear();
+                data.selectedDefenseCards.clear();
+                data.playerTarget = false;
+                data.targetIdx = -1;
+
                 // 次のターンへの準備
+                data.currentPhase = BattlePhase::Select;
                 NextTurn(data);
             }
         }
+    }
+}
+
+void BattleLogicManager::UpdateCardAnimation(BattleData& data) {
+    float targetYOffset = 65.0f;
+    size_t count = 0;
+
+    // 現在のフェーズによってカウント対象を分岐
+    if (data.currentPhase == BattlePhase::Select) {
+        count = data.selectedCards.size();
+    }
+    else if (data.currentPhase == BattlePhase::DefenseSelect) {
+        count = data.selectedDefenseCards.size();
+    }
+    // 【重要】Reveal中も「選択していたカード」を表示するはずなので、ここでもカウントが必要
+    else if (data.currentPhase == BattlePhase::Reveal) {
+        count = data.selectedCards.size();
+    }
+
+    // アニメーション計算
+    if (count > 0) {
+        if (count >= 4) {
+            targetYOffset = 30.0f;
+        }
+        data.currentYOffset += (targetYOffset - data.currentYOffset) * 0.1f;
+    }
+    else {
+        data.currentYOffset = 65.0f;
     }
 }
 
@@ -134,84 +229,101 @@ void BattleLogicManager::RemovePlayer(BattleData& data, int targetIdx) {
 
 TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& attacker) {
     TotalAttack total;
-    total.power = 0;
-    total.isAll = false;
-    total.type = _T("無");
 
     auto& hand = attacker.Hand.GetCards();
 
-    if (data.selectedCards.empty()) return total;
+    if (data.selectedCards.empty()) {
+        total.type = _T("無");
+        return total;
+    }
 
-    for (size_t i = 0; i < data.selectedCards.size(); ++i) {
+    if (data.selectedCards.empty()) return total;
+    if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
+
+    // 1枚目の属性をベースにする
+    std::string currentElement = hand[data.selectedCards[0]].GetType();
+    if (currentElement == "") currentElement = _T("無");
+
+    bool hasNonLightAddition = false;
+
+    for (size_t i = 0; i < data.selectedCards.size(); i++) {
         int index = data.selectedCards[i];
         if (index < 0 || index >= (int)hand.size()) continue;
 
         const Card& card = hand[index];
 
+        // 2枚目以降はAttackのみ許可
         if (i > 0 && card.GetCategory() != Attack) {
-            continue; // 2枚目以降はAttackのみ許可
+            continue;
         }
 
+        // 威力を加算
         total.power += card.GetPower();
 
+        // 全体攻撃(All)の判定
         if (card.GetCategory() == All) {
             total.isAll = true;
             total.hitPercent = card.GetPercent();
         }
 
-        // ★属性の再計算ロジック
-        std::string cardType = card.GetType();
-        if (cardType == "") cardType = _T("無");
-
-        if (cardType == _T("光")) {
-            // 現在が無属性のときだけ光にする（1枚目が光の場合など）
-            // すでに炎などになっていれば上書きしない（引き継ぐ）
-            if (total.type == _T("無")) {
-                total.type = _T("光");
+        // 属性チェック
+        if (i > 0) {
+            std::string addType = card.GetType();
+            if (addType == "") addType = _T("無");
+            if (addType != _T("光")) {
+                hasNonLightAddition = true;
             }
         }
-        else if (cardType != _T("無")) {
-            // 光・無以外の属性（炎、水、木、闇など）なら、その属性で上書きする
-            total.type = cardType;
-        }
     }
+
+    // 最終的な属性を適用
+    total.type = currentElement;
 
     return total;
 }
 
-void BattleLogicManager::ResolveDamage(BattleData& data, Player& target, const TotalAttack& attack, const Card* defenseCard) {
-
-    // ダメージリゾルバーに「計算」だけを依頼する
-    DamageResult result = DamageResolver::CalculateDamage(attack, defenseCard);
-
-    // 結果に応じてプレイヤーのステータスを更新する（ロジックマネージャーの仕事）
-
-    // もし回避(Miss)していたら、ダメージ処理はせず終わる
-    if (!result.isHit) {
-        // TODO: UIマネージャー側で「Miss!」と表示させるフラグをdataに立てるなど
-        return;
-    }
-
-    // 闇属性による即死判定
-    if (result.isInstantDeath) {
-        target.setHp(0);
-        target.Status.dead = true; // Status構造体にアクセス
-        return;
-    }
-
-    // 通常のダメージ処理
-    if (result.finalDamage > 0) {
-        int currentHp = target.getHp();
-        target.setHp(currentHp - result.finalDamage);
-
-        // 死亡判定
-        if (target.getHp() <= 0) {
-            target.setHp(0);
-            target.Status.dead = true; // Status構造体にアクセス
+void BattleLogicManager::ResolveDamage(BattleData& data, Player& target, const TotalAttack& attack, const TotalDefense& defense) {
+    
+    // 命中判定（全体攻撃などのフラグ判定）
+    if (attack.isAll) {
+        if ((rand() % 100) > attack.hitPercent) {
+            // Miss! ダメージ処理を行わず終了
+            return;
         }
     }
 
-    // 完全にガードしきった（finalDamage == 0）時の処理もここに書けます
+    int finalDamage = attack.power;
+
+    // ガード判定ロジック
+    // defense構造体のフラグと属性を使用して判定
+    if (defense.isActive) {
+        // DamageResolverの相性チェックを呼び出す
+        if (DamageResolver::IsValidGuard(attack.type, defense.type)) {
+            finalDamage = (std::max)(0, finalDamage - defense.power);
+        }
+        else {
+            // ガード失敗（相性不良）：貫通。ダメージはそのまま
+        }
+    }
+
+    // ダメージがマイナスにならないように
+    if (finalDamage < 0) finalDamage = 0;
+
+    // 3. 闇属性の特殊ルール
+    if (attack.type == "闇") {
+        if (finalDamage > 0) {
+            target.setHp(0);
+            target.Status.dead = true;
+        }
+    }
+    else {
+        // 4. 通常ダメージ適用
+        target.setHp(target.getHp() - finalDamage);
+        if (target.getHp() <= 0) {
+            target.setHp(0);
+            target.Status.dead = true;
+        }
+    }
 }
 
 void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::vector<Card>& hand) {
@@ -220,24 +332,131 @@ void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::v
         return;
     }
 
-    std::string calculatedElement = _T("無"); // 初期値を「無」に設定
+    // 1枚目をベースにする（念のためインデックス範囲チェック）
+    int firstIdx = data.selectedCards[0];
+    if (firstIdx < 0 || firstIdx >= (int)hand.size()) {
+        data.currentAttackElement = _T("無");
+        return;
+    }
 
-    for (size_t i = 0; i < data.selectedCards.size(); ++i) {
-        std::string cardType = hand[data.selectedCards[i]].GetType();
-        if (cardType == "") cardType = _T("無");
+    std::string currentElement = hand[firstIdx].GetType();
+    if (currentElement == "") currentElement = _T("無");
 
-        // 属性の再計算ロジック
-        if (cardType == _T("光")) {
-            // 現在が無属性のときだけ光にする
-            if (calculatedElement == _T("無")) {
-                calculatedElement = _T("光");
-            }
-        }
-        else if (cardType != _T("無")) {
-            // 光・無以外の属性なら上書きする
-            calculatedElement = cardType;
+    bool hasNonLightAddition = false;
+
+    // 2枚目以降をチェックして状態を更新していく
+    for (size_t i = 1; i < data.selectedCards.size(); ++i) {
+        std::string addType = hand[data.selectedCards[i]].GetType();
+        if (addType == "") addType = _T("無");
+
+        if (addType != _T("光")) {
+            hasNonLightAddition = true;
         }
     }
 
-    data.currentAttackElement = calculatedElement;
+    // 最終的な表示属性を決定
+    if (hasNonLightAddition) {
+        data.currentAttackElement = _T("無");
+    }
+    else {
+        data.currentAttackElement = currentElement;
+    }
+}
+
+TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player& defender) {
+    TotalDefense total;
+    total.power = 0;
+    total.isActive = false; // 初期化漏れ対策
+
+    auto& hand = defender.Hand.GetCards();
+
+    if (data.selectedDefenseCards.empty()) {
+        total.type = _T("無");
+        return total;
+    }
+
+    // ★安全ガード：選んだカードが手札の範囲外なら強制リターン
+    if (data.selectedDefenseCards[0] < 0 || data.selectedDefenseCards[0] >= (int)hand.size()) {
+        total.type = _T("無");
+        return total;
+    }
+
+    total.isActive = true;
+
+    // 1枚目をベースにする
+    std::string currentElement = hand[data.selectedDefenseCards[0]].GetType();
+    if (currentElement == "") currentElement = _T("無");
+
+    // 選択された防御カードを順に処理
+    for (size_t i = 0; i < data.selectedDefenseCards.size(); ++i) {
+        int index = data.selectedDefenseCards[i];
+        if (index < 0 || index >= (int)hand.size()) continue;
+
+        const Card& card = hand[index];
+
+        // 防御力を加算
+        total.power += card.GetPower();
+
+        // 2枚目以降の属性チェック
+        if (i > 0) {
+            std::string addType = card.GetType();
+            if (addType == "") addType = _T("無");
+
+            if (addType == currentElement) {
+                // 同じ属性同士はそのまま維持
+            }
+            else if (addType == _T("光")) {
+                // 追加が「光」の場合、現在の属性をそのまま維持
+            }
+            else if (currentElement == _T("光")) {
+                // 現在が「光」で、追加が「光以外」なら上書き
+                currentElement = addType;
+            }
+            else {
+                // 違う属性が混ざった場合は無になる
+                currentElement = _T("無");
+            }
+        }
+    }
+
+    total.type = currentElement;
+    return total;
+}
+
+void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand) {
+    // 選択された防御カードがない場合は無属性
+    if (data.selectedDefenseCards.empty()) {
+        data.currentDefenseElement = _T("無");
+        return;
+    }
+
+    // 安全ガード
+    if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return;
+
+    // 防御の場合は1枚目（ベース）の属性を取得
+    std::string element = hand[data.selectedDefenseCards[0]].GetType();
+    if (element == "") element = _T("無");
+
+    // 2枚目以降をチェックして状態を更新していく
+    for (size_t i = 1; i < data.selectedDefenseCards.size(); ++i) {
+        std::string addType = hand[data.selectedDefenseCards[i]].GetType();
+        if (addType == "") addType = _T("無");
+
+        if (addType == element) {
+            // 同じ属性同士はそのまま維持
+        }
+        else if (addType == _T("光")) {
+            // 追加が「光」の場合、現在の属性（炎、水、無など）をそのまま維持
+        }
+        else if (element == _T("光")) {
+            // 現在が「光」で、追加が「光以外」なら上書き（光＋炎＝炎、光＋無＝無）
+            element = addType;
+        }
+        else {
+            // 違う属性が混ざった場合は無になる
+            element = _T("無");
+        }
+    }
+
+    data.currentDefenseElement = element;
 }
