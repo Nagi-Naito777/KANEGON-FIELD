@@ -200,42 +200,52 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         // テキストエリアの設定（カードのすぐ下に配置）
         int textAreaY = y + CARD_H;
         int textAreaH = 25; // テキスト背景の高さ
-        DrawBox(x, textAreaY, x + CARD_W, textAreaY + textAreaH, Col.GetBoxYel(), TRUE);
+        bool show_box = false;  // カード下の数値を表示するかの有無
 
         // カテゴリ別テキスト描画
         TCHAR buf[64];
         switch (hand[i].GetCategory()) {
         case Attack:
             _stprintf_s(buf, hand[i].GetAdd() ? _T("+攻%d") : _T("攻%d"), hand[i].GetPower());
+            show_box = true;
             break;
         case Bilingual:
             if (data.currentPhase == BattlePhase::Select)
                 _stprintf_s(buf, isAttackTurn ? _T("攻%d") : _T("守%d"), hand[i].GetPower());
             else
                 _stprintf_s(buf, _T("守%d"), hand[i].GetPower());
+            show_box = true;
             break;
         case Magic:
-            if (hand[i].GetPower() > 0)
+            if (hand[i].GetPower() > 0) {
                 _stprintf_s(buf, hand[i].GetAdd() ? _T("+攻%d") : _T("攻%d"), hand[i].GetPower());
+                show_box = true;
+            }
             break;
         case Defense:
             _stprintf_s(buf, _T("守%d"), hand[i].GetPower());
+            show_box = true;
             break;
         case All:
             _stprintf_s(buf, _T("%d%%攻%d"), hand[i].GetPercent(), hand[i].GetPower());
+            show_box = true;
             break;
         case Buy:break;
         case Sell:break;
         case Change:break;
         }
 
-        int w = GetDrawStringWidth(buf, (int)_tcslen(buf));
-        DrawString(x + (CARD_W - w) / 2, textAreaY + 4, buf, Ele_Col);
+        // 手札カードの下の数値描画処理
+        if (show_box) {
+            DrawBox(x, textAreaY, x + CARD_W, textAreaY + textAreaH, Col.GetBoxYel(), TRUE);
+            int w = GetDrawStringWidth(buf, (int)_tcslen(buf));
+            DrawString(x + (CARD_W - w) / 2, textAreaY + 4, buf, Ele_Col);
+        }
 
         // 選択不可の暗転処理
         if ((data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::DefenseSelect) && !isSelectable) {
             SetDrawBlendMode(DX_BLENDMODE_ALPHA, 150);
-            DrawBox(x, y, x + CARD_W, y + CARD_H + textAreaH, Col.GetBla(), TRUE);
+            DrawBox(x, y, x + CARD_W, y + CARD_H, Col.GetBla(), TRUE);
             SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
         }
     }
