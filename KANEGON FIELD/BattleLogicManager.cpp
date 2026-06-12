@@ -5,13 +5,22 @@
 
 void BattleLogicManager::Update(BattleData& data) {
 
+    // 全体の汎用アニメーションフレームを更新
+    data.animFrame++;
+
     // カード表示のアニメーション処理
     UpdateCardAnimation(data);
 
     // =============================================================
-    // Reveal（公開演出）フェーズの進行
+    // 各バトルのフェーズ進行(ステートマシン)
     // =============================================================
-    if (data.currentPhase == BattlePhase::Reveal) {
+    switch (data.currentPhase) {
+    case BattlePhase::Select:
+    case BattlePhase::DefenseSelect:
+        // 入力待ちフェーズ
+        break;
+
+    case BattlePhase::AttackReveal:
         if (data.animationTimer > 0) {
             data.animationTimer--;
         }
@@ -23,148 +32,161 @@ void BattleLogicManager::Update(BattleData& data) {
             else {
                 // すべて公開し終わったらエフェクトフェーズへ
                 data.currentPhase = BattlePhase::Effect;
-                data.animationTimer = 60;
+                data.animationTimer = 60;   // ターゲット表示時間
             }
         }
-        return; // 自動進行フェーズ中はここで処理を終える
-    }
+        break;
 
-    // =============================================================
-    // Effect / Damage（ダメージ計算・削除・ドロー）フェーズの進行
-    // =============================================================
-    if (data.currentPhase == BattlePhase::Effect || data.currentPhase == BattlePhase::Damage) {
+    case BattlePhase::TargetDisplay:
+        // ターゲット表示のウェイト
         if (data.animationTimer > 0) {
             data.animationTimer--;
         }
+        else {
+            // 防御カードの選択フェーズへ移行
+            data.currentPhase = BattlePhase::DefenseSelect;
+        }
+        break;
 
-        if (data.animationTimer == 0) {
-            if (data.currentPhase == BattlePhase::Effect) {
-                // --- ダメージ計算の実行 ---
-                Player& attacker = data.Player_Turn[data.currentTurnIdx];
-                Player* target = nullptr; // ポインタで保持する
-
-                if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
-                    target = &data.Player_Turn[data.targetIdx];
-                }
-
-                // 攻撃計算
-                TotalAttack attackData = CalculateTotalAttack(data, attacker);
-
-                // 防御計算
-                TotalDefense defenseData;
-                if (target != nullptr && !data.selectedDefenseCards.empty()) {
-                    defenseData.isActive = true;
-
-                    // 全手札のリストを取得
-                    const std::vector<Card>& cards = target->Hand.GetCards();
-
-                    // 選択されたインデックスを使って、特定のカードを参照する
-                    // インデックスの範囲外アクセスを防ぐため、念のためサイズチェック
-                    int index = data.selectedDefenseCards[0];
-                    if (index >= 0 && index < (int)cards.size()) {
-                        const Card& defCard = cards[index];
-                        defenseData.power = defCard.GetPower();
-                        defenseData.type = defCard.GetType();
-                    }
-                }
-
-                // ダメージ適用（ターゲットがいる場合のみ）
-                if (target != nullptr) {
-                    ResolveDamage(data, *target, attackData, defenseData);
-                }
-
-                // 計算が終わったらダメージ演出フェーズへ
-                data.currentPhase = BattlePhase::Damage;
-                data.animationTimer = 90;
+    case BattlePhase::DefenseReveal:
+        // 防御カードの公開演出
+        if (data.animationTimer > 0) {
+            data.animationTimer--;
+        }
+        else {
+            if (data.revealIndex < (int)data.selectedDefenseCards.size()) {
+                data.revealIndex++;
+                data.animationTimer = 30; // 次の防御カードを開くまでの時間
             }
-            else if (data.currentPhase == BattlePhase::Damage) {
-                // --- 使ったカードの破棄とドロー処理 ---
-                Player& attacker = data.Player_Turn[data.currentTurnIdx];
-
-                // 使用された奇跡カードの枚数をカウントする
-                int miracleUsageCount = 0;
-                for (int idx : data.selectedCards) {
-                    // インデックスの範囲チェックをしてからカテゴリを確認
-                    if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
-                        if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
-                            miracleUsageCount++;
-                        }
-                    }
-                }
-
-                // 攻撃側のカード破棄
-                std::sort(data.selectedCards.rbegin(), data.selectedCards.rend());
-                
-                int removedCount = 0; // 破棄した枚数
-                for (int idx : data.selectedCards) {
-                    const Card& card = attacker.Hand.GetCards()[idx];
-                    // 奇跡(Magic)以外なら破棄
-                    if (card.GetCategory() != CardCategory::Magic) {
-                        attacker.Hand.Remove(idx);
-                        removedCount++;
-                    }
-                }
-
-                // ドロー処理（破棄した分 ＋ 奇跡使用分）
-                int totalDraw = removedCount + miracleUsageCount;
-                for (int i = 0; i < totalDraw; ++i) {
-                    attacker.Hand.Add(CardDB.GetRandomCard());
-                }
-
-                // 手札の並び替え（奇跡カードを後ろにするためのソート）
-                attacker.Hand.Sort();
-
-                // ターゲットが存在する場合のみ防御側の処理を行う
-                if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
-                    Player& target = data.Player_Turn[data.targetIdx];
-
-                    // 防御側も同様に奇跡使用枚数をカウント
-                    int defMiracleCount = 0;
-                    for (int idx : data.selectedDefenseCards) {
-                        if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
-                            if (target.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
-                                defMiracleCount++;
-                            }
-                        }
-                    }
-
-                    // 防御側のカード破棄(防御カードも同様に奇跡カード以外を削除)
-                    std::sort(data.selectedDefenseCards.rbegin(), data.selectedDefenseCards.rend());
-                    int defRemovedCount = 0;
-                    for (int idx : data.selectedDefenseCards) {
-                        const Card& card = target.Hand.GetCards()[idx];
-                        if (card.GetCategory() != CardCategory::Magic) {
-                            target.Hand.Remove(idx);
-                            defRemovedCount++;
-                        }
-                    }
-
-                    // 防御側のドロー処理
-                    if (!target.Status.dead) {
-                        int defTotalDraw = defRemovedCount + defMiracleCount;
-                        for (int i = 0; i < defTotalDraw; ++i) {
-                            target.Hand.Add(CardDB.GetRandomCard());
-                        }
-                        target.Hand.Sort(); // 防御側も並び替え処理を置く
-                    }
-
-                    // 死亡判定
-                    if (target.Status.dead) {
-                        RemovePlayer(data, data.targetIdx);
-                    }
-                }
-
-                // --- ステートのリセット（重要） ---
-                data.selectedCards.clear();
-                data.selectedDefenseCards.clear();
-                data.playerTarget = false;
-                data.targetIdx = -1;
-
-                // 次のターンへの準備
-                data.currentPhase = BattlePhase::Select;
-                NextTurn(data);
+            else {
+                // 公開完了後、ダメージ計算へ
+                data.currentPhase = BattlePhase::Effect;
+                data.animationTimer = 0;
             }
         }
+        break;
+
+    case BattlePhase::Effect: {
+        // ダメージ計算の実行
+        Player& attacker = data.Player_Turn[data.currentTurnIdx];
+        Player* target = nullptr; // ポインタで保持する
+
+        if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
+            target = &data.Player_Turn[data.targetIdx];
+        }
+
+        // 攻撃計算
+        TotalAttack attackData = CalculateTotalAttack(data, attacker);
+
+        // 防御計算
+        TotalDefense defenseData;
+        if (target != nullptr && !data.selectedDefenseCards.empty()) {
+            defenseData = CalculateTotalDefense(data, *target);
+        }
+
+        // ダメージ適用（ターゲットがいる場合のみ）
+        if (target != nullptr) {
+            ResolveDamage(data, *target, attackData, defenseData);
+        }
+
+        // 計算が終わったらダメージ演出フェーズへ
+        data.currentPhase = BattlePhase::DamageResult;
+        data.animationTimer = 90; // ダメージ表示時間（1.5秒）
+        data.animFrame = 0;       // 演出用フレームをリセット
+        break;
+    }
+
+    case BattlePhase::DamageResult:
+        // ダメージ演出のコマ送り
+        data.animFrame++;
+
+        // ダメージ数の表示ウェイト
+        if (data.animationTimer > 0) {
+            data.animationTimer--;
+        }
+        else {
+            // 時間が来たら終了処理へ
+            data.currentPhase = BattlePhase::Idle;
+        }
+        break;
+
+    case BattlePhase::Idle: {
+        // 使ったカードの破棄とドロー・次ターンの準備
+        Player& attacker = data.Player_Turn[data.currentTurnIdx];
+
+        // 使用された奇跡カードの枚数をカウントする
+        int miracleUsageCount = 0;
+        for (int idx : data.selectedCards) {
+            if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
+                if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                    miracleUsageCount++;
+                }
+            }
+        }
+
+        // 攻撃側のカード破棄
+        std::sort(data.selectedCards.rbegin(), data.selectedCards.rend());
+        int removedCount = 0;
+        for (int idx : data.selectedCards) {
+            const Card& card = attacker.Hand.GetCards()[idx];
+            // 奇跡(Magic)以外なら破棄
+            if (card.GetCategory() != CardCategory::Magic) {
+                attacker.Hand.Remove(idx);
+                removedCount++;
+            }
+        }
+
+        // ドロー処理（破棄した分 ＋ 奇跡使用分）
+        int totalDraw = removedCount + miracleUsageCount;
+        for (int i = 0; i < totalDraw; ++i) {
+            attacker.Hand.Add(CardDB.GetRandomCard());
+        }
+        attacker.Hand.Sort();
+
+        // ターゲットが存在する場合のみ防御側の処理を行う
+        if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
+            Player& target = data.Player_Turn[data.targetIdx];
+
+            // 防御側も同様に奇跡使用枚数をカウント
+            int defMiracleCount = 0;
+            for (int idx : data.selectedDefenseCards) {
+                if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
+                    if (target.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                        defMiracleCount++;
+                    }
+                }
+            }
+
+            // 防御側のカード破棄
+            std::sort(data.selectedDefenseCards.rbegin(), data.selectedDefenseCards.rend());
+            int defRemovedCount = 0;
+            for (int idx : data.selectedDefenseCards) {
+                const Card& card = target.Hand.GetCards()[idx];
+                if (card.GetCategory() != CardCategory::Magic) {
+                    target.Hand.Remove(idx);
+                    defRemovedCount++;
+                }
+            }
+
+            // 防御側のドロー処理
+            if (!target.Status.dead) {
+                int defTotalDraw = defRemovedCount + defMiracleCount;
+                for (int i = 0; i < defTotalDraw; ++i) {
+                    target.Hand.Add(CardDB.GetRandomCard());
+                }
+                target.Hand.Sort();
+            }
+
+            // 死亡判定
+            if (target.Status.dead) {
+                RemovePlayer(data, data.targetIdx);
+            }
+        }
+
+        // NextTurn内でステートリセットと currentPhase = Select への移行が行われます
+        NextTurn(data);
+        break;
+    }
     }
 }
 
@@ -173,15 +195,11 @@ void BattleLogicManager::UpdateCardAnimation(BattleData& data) {
     size_t count = 0;
 
     // 現在のフェーズによってカウント対象を分岐
-    if (data.currentPhase == BattlePhase::Select) {
+    if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::AttackReveal) {
         count = data.selectedCards.size();
     }
-    else if (data.currentPhase == BattlePhase::DefenseSelect) {
+    else if (data.currentPhase == BattlePhase::DefenseSelect || data.currentPhase == BattlePhase::DefenseReveal) {
         count = data.selectedDefenseCards.size();
-    }
-    // 【重要】Reveal中も「選択していたカード」を表示するはずなので、ここでもカウントが必要
-    else if (data.currentPhase == BattlePhase::Reveal) {
-        count = data.selectedCards.size();
     }
 
     // アニメーション計算
@@ -205,7 +223,8 @@ void BattleLogicManager::NextTurn(BattleData& data) {
     // 前のターンの選択情報を完全にリセット
     data.selectedCards.clear();
     data.selectedDefenseCards.clear();
-    data.totalPower = 0;
+    data.attackTotalPower = 0;
+    data.defenseTotalPower = 0;
     data.playerTarget = false;
     data.targetIdx = -1;
     data.revealIndex = 0;

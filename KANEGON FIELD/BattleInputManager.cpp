@@ -59,7 +59,8 @@ bool BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& 
             data.selectedDefenseCards.clear();
             data.playerTarget = false;
             data.targetIdx = -1;
-            data.totalPower = 0;
+            data.attackTotalPower = 0;
+            data.defenseTotalPower = 0;
             data.isSurrenderConfirm = false;
             data.selectedOption = BattleOption::RETURN;
             return true; // 降参によるバトルループ終了
@@ -126,7 +127,7 @@ void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManag
         data.isHoverIdx[BattleOption::DEFENSE] = input.IsMouseOver(DEF_BTN_X, DEF_BTN_Y, DECISION_AREA_W, DECISION_AREA_H);
 
         if (input.IsLeftClicked() && data.isHoverIdx[BattleOption::DEFENSE]) {
-            data.currentPhase = BattlePhase::Reveal;
+            data.currentPhase = BattlePhase::DefenseReveal;
             data.revealIndex = 0;
             data.animationTimer = 15;
         }
@@ -246,11 +247,25 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                     }
                 }
 
-                // 威力の再計算
-                data.totalPower = 0;
-                for (int idx : activeSelection) {
-                    if (idx >= 0 && idx < (int)humanHandVec.size()) {
-                        data.totalPower += humanHandVec[idx].GetPower();
+                // 威力の再計算（ポインタを使ってフェーズごとに変数を切り替える）
+                int* pTargetPower = nullptr;
+
+                // フェーズに応じて操作対象の変数を決める
+                if (data.currentPhase == BattlePhase::Select) {
+                    pTargetPower = &data.attackTotalPower;
+                }
+                else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
+                    pTargetPower = &data.defenseTotalPower;
+                }
+
+                // ポインタが有効なら計算を実行
+                if (pTargetPower != nullptr) {
+                    *pTargetPower = 0; // 0にリセット（*pTargetPowerはポインタの指す変数そのものを指す）
+
+                    for (int idx : activeSelection) {
+                        if (idx >= 0 && idx < (int)humanHandVec.size()) {
+                            *pTargetPower += humanHandVec[idx].GetPower();
+                        }
                     }
                 }
             }

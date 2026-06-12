@@ -44,7 +44,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 			data.selectedCards.push_back(bestIndex);
 
 			// 選んだカードの威力と属性をデータにセット
-			data.totalPower = hand[bestIndex].GetPower();
+			data.attackTotalPower = hand[bestIndex].GetPower();
 			std::string type = hand[bestIndex].GetType();
 			data.currentAttackElement = (type == "") ? "無" : type;
 
@@ -82,7 +82,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 			// --- 攻撃できるカードがない場合（パス） ---
 			data.playerTarget = false;
 			data.targetIdx = -1;
-			data.totalPower = 0;
+			data.attackTotalPower = 0;
 			data.currentAttackElement = "無";
 
 			// （ターンインデックスを次に進めて、Selectフェーズのままにする）
@@ -125,8 +125,8 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 				data.selectedDefenseCards.push_back(bestIndex);
 			}
 
-			// 防御できても、カードがなくて防御できなくても Reveal（公開）フェーズへ
-			data.currentPhase = BattlePhase::Reveal;
+			// 防御できても、カードがなくて防御できなくても公開フェーズへ
+			data.currentPhase = BattlePhase::DefenseReveal;
 			data.revealIndex = 0;
 			data.animationTimer = 15;
 		}

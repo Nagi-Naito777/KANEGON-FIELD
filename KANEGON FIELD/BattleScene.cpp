@@ -92,7 +92,8 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 	data.targetIdx = -1;
 	data.playerTarget = false;
 	data.selectedCards.clear();
-	data.totalPower = 0;
+	data.attackTotalPower = 0;
+	data.defenseTotalPower = 0;
 	data.currentPhase = BattlePhase::Select;
 }
 

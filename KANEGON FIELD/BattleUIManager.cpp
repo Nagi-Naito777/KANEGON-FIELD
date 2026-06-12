@@ -30,8 +30,33 @@ void BattleUIManager::Draw(const BattleData& data) const {
     DrawPlayerStatus(data, data.isHoverPlayerIdx);
 
     // ターンプレイヤー名とターゲット名
-    DrawTurnPlayerName(data.Player_Turn[data.currentTurnIdx]);
-    DrawTargetPlayerName(data);
+    const Player& attacker = data.Player_Turn[data.currentTurnIdx];
+    DrawTurnPlayerName(attacker); // 攻撃側の名前は常に表示
+
+    // ターゲットの表示は、攻撃カード決定後（防衛フェーズ以降）に行う
+    if (data.currentPhase == BattlePhase::DefenseSelect || data.currentPhase == BattlePhase::DamageResult) {
+        DrawTargetPlayerName(data);
+    }
+
+    // ② 攻撃カードの描画 (セレクト開始?ダメージ計算完了までずっと表示)
+    if (data.currentPhase == BattlePhase::Select ||
+        data.currentPhase == BattlePhase::DefenseSelect ||
+        data.currentPhase == BattlePhase::DamageResult) {
+
+        // 攻撃側プレイヤーの手札データを渡す
+        DrawSelectedCard(data, attacker, data.currentYOffset);
+    }
+
+    // ③ 防御カードの描画 (防衛セレクト開始?ダメージ計算完了までずっと表示)
+    if (data.currentPhase == BattlePhase::DefenseSelect ||
+        data.currentPhase == BattlePhase::DamageResult) {
+
+        if (data.targetIdx >= 0 && data.targetIdx < data.Player_Turn.size()) {
+            const Player& defender = data.Player_Turn[data.targetIdx];
+            // 防衛側プレイヤーの手札データを渡す
+            DrawDefenseCards(data, defender, data.targetIdx, data.currentYOffset);
+        }
+    }
 
     // 操作プレイヤー（人間）を探して情報を取得
     const Player* humanPlayer = nullptr;
@@ -48,21 +73,12 @@ void BattleUIManager::Draw(const BattleData& data) const {
         // 手札の描画
         DrawPlayerHand(data, *humanPlayer, data.hoveredCardIdx, data.isHoverCardIdx);
 
-        // フェーズごとの選択UI描画
-        if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::Damage) {
-            // 攻撃選択中のカード表示
-            DrawSelectedCard(data, *humanPlayer, data.currentYOffset);
-
-            // 決定ボタンはセレクトフェーズ中のみ
-            if (data.currentPhase == BattlePhase::Select) {
-                DrawCardSelectButton(data.isHoverIdx);
-            }
+        // 決定ボタンの描画 (自分が操作すべきフェーズの時だけ表示)
+        if (data.currentPhase == BattlePhase::Select && humanIdx == data.currentTurnIdx) {
+            DrawCardSelectButton(data.isHoverIdx); // 攻撃決定
         }
-
-        // 防御側も同様に、ダメージ計算中も表示したい
-        if (data.currentPhase == BattlePhase::DefenseSelect || data.currentPhase == BattlePhase::Damage) {
-            // 防御選択中のカード表示
-            DrawDefenseCards(data, *humanPlayer, humanIdx, data.currentYOffset);
+        if (data.currentPhase == BattlePhase::DefenseSelect && humanIdx == data.targetIdx) {
+            DrawCardSelectButton(data.isHoverIdx); // 防御決定
         }
     }
 
@@ -439,10 +455,10 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
             else if (data.currentAttackElement == "光") totalCol = GetColor(155, 155, 0);
             else if (data.currentAttackElement == "闇") totalCol = GetColor(255, 100, 255);
 
-            DrawFormatStringToHandle(totalDrawX, totalDrawY, totalCol, Font.GetSmall(), _T("攻 %d"), data.totalPower);
+            DrawFormatStringToHandle(totalDrawX, totalDrawY, totalCol, Font.GetSmall(), _T("攻 %d"), data.attackTotalPower);
         }
         else {
-            DrawFormatStringToHandle(totalDrawX, totalDrawY, GetColor(0, 255, 255), Font.GetSmall(), _T("守 %d"), data.totalPower);
+            DrawFormatStringToHandle(totalDrawX, totalDrawY, GetColor(0, 255, 255), Font.GetSmall(), _T("守 %d"), data.defenseTotalPower);
         }
     }
 }
@@ -541,112 +557,91 @@ void BattleUIManager::DrawTargetPlayerName(const BattleData& data) const {
 
 // 防御側のカード表示
 void BattleUIManager::DrawDefenseCards(const BattleData& data,
-    const Player& player, int humanIdx, float currentYOffset) const {
+    const Player& player, int defenceIdx, float currentYOffset) const {
 
+    // まだカードが選ばれていない場合は何もしない
+    if (data.selectedDefenseCards.empty()) return;
 
-    // 防御フェーズかつ、自身がターゲットにされている場合のみ描画
-    if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
+    const auto& hand = player.Hand.GetCards();
 
-        // まだカードが選ばれていない場合は何もしない
-        if (data.selectedDefenseCards.empty()) return;
+    // 描画開始座標 (ターゲット名の下)
+    int startX = 350;
+    int startY = 95;
+    const int boxWidth = 250;
+    int yOffset = (int)currentYOffset;
 
-        const auto& hand = player.Hand.GetCards(); // 手札を参照
+    // --- サイズ設定（手札より少し小さめ） ---
+    const float SCALE = 1.0f;
+    const int CARD_W = (int)(50 * SCALE);
+    const int CARD_H = (int)(50 * SCALE);
 
-        // --- サイズ設定（手札より少し小さめ） ---
-        const float SCALE = 1.0f;
-        const int CARD_W = (int)(50 * SCALE);
-        const int CARD_H = (int)(50 * SCALE);
+    // --- 選択されたすべての防御カードを描画 ---
+    for (int i = 0; i < (int)data.selectedDefenseCards.size(); ++i) {
+        int handIdx = data.selectedDefenseCards[i];
+        if (handIdx >= 0 && handIdx < (int)hand.size()) {
+            const auto& card = hand[handIdx];
+            int drawX = startX;
+            int drawY = startY + (i * yOffset);
 
-        // --- 描画開始座標 ---
-        // 攻撃側(startX=15)と対になるよう、ターゲット名(x=350)の位置に合わせる
-        int startX = 350;
-        int startY = 95;
-        const int boxWidth = 250;
+            // 背面のテキストエリアの描画
+            DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBoxYel(), TRUE);
+            DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBla(), FALSE);
 
-        // -------------------------------------------------------------
-        // ★攻撃側（DrawSelectedCard）と完全に同じ変数をそのまま使う
-        // -------------------------------------------------------------
-        int yOffset = (int)currentYOffset;
-        // -------------------------------------------------------------
+            // カード画像の描画
+            int picIdx = card.graphicIndex;
+            if (picIdx >= 0 && picIdx < 100) {
+                DrawExtendGraph(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Pic.GetCard(picIdx), TRUE);
+            }
+            DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);
 
-        // --- 選択されたすべてのカードを縦リストとして描画 ---
-        for (int i = 0; i < (int)data.selectedDefenseCards.size(); ++i) {
-            int handIdx = data.selectedDefenseCards[i];
-            if (handIdx >= 0 && handIdx < (int)hand.size()) {
-                const auto& card = hand[handIdx];
+            int textX = drawX + CARD_W + 15;
 
-                int drawX = startX;
-                // 攻撃側と全く同じアニメーション計算
-                int drawY = startY + (i * yOffset);
+            // 3. 属性色の取得
+            int Ele_Col = Col.GetBla();
+            if (card.GetType() == "炎") { Ele_Col = GetColor(255, 0, 0); }
+            else if (card.GetType() == "水") { Ele_Col = GetColor(0, 0, 255); }
+            else if (card.GetType() == "木") { Ele_Col = GetColor(0, 155, 0); }
+            else if (card.GetType() == "光") { Ele_Col = GetColor(155, 155, 0); }
+            else if (card.GetType() == "闇") { Ele_Col = GetColor(255, 100, 255); }
 
-                // 1. 背面のテキストエリア（UIボックス）の描画
-                DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBoxYel(), TRUE);
-                DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBla(), FALSE);
+            // 4. カテゴリごとの文字描画
+            TCHAR buf[64] = _T("");
+            bool hasText = true;
 
-                // 2. カード画像の描画
-                int picIdx = card.graphicIndex;
-                if (picIdx >= 0 && picIdx < 100) {
-                    DrawExtendGraph(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Pic.GetCard(picIdx), TRUE);
-                }
-                DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);
+            switch (card.GetCategory()) {
+            case Attack:
+            case Bilingual:
+                _stprintf_s(buf, card.GetAdd() ? _T("守%d") : _T("守%d"), card.GetPower());
+                break;
+            case Magic:
+                break;
+            case Defense:
+                _stprintf_s(buf, _T("守%d"), card.GetPower());
+                break;
+            default:
+                hasText = false;
+                break;
+            }
 
-                int textX = drawX + CARD_W + 15;
-
-                // 3. 属性色の取得
-                int Ele_Col = Col.GetBla();
-                if (card.GetType() == "炎") { Ele_Col = GetColor(255, 0, 0); }
-                else if (card.GetType() == "水") { Ele_Col = GetColor(0, 0, 255); }
-                else if (card.GetType() == "木") { Ele_Col = GetColor(0, 155, 0); }
-                else if (card.GetType() == "光") { Ele_Col = GetColor(155, 155, 0); }
-                else if (card.GetType() == "闇") { Ele_Col = GetColor(255, 100, 255); }
-
-                // 4. カテゴリごとの文字描画
-                TCHAR buf[64] = _T("");
-                bool hasText = true;
-
-                switch (card.GetCategory()) {
-                case Attack:
-                case Bilingual:
-                    _stprintf_s(buf, card.GetAdd() ? _T("守%d") : _T("守%d"), card.GetPower());
-                    break;
-                case Magic:
-                    break;
-                case Defense:
-                    _stprintf_s(buf, _T("守%d"), card.GetPower());
-                    break;
-                default:
-                    hasText = false;
-                    break;
-                }
-
-                if (hasText) {
-                    DrawFormatString(textX, drawY + 2, Ele_Col, _T("[%s]"), card.GetName().c_str());
-                    DrawString(textX, drawY + 22, buf, Ele_Col);
-                }
+            if (hasText) {
+                DrawFormatString(textX, drawY + 2, Ele_Col, _T("[%s]"), card.GetName().c_str());
+                DrawString(textX, drawY + 22, buf, Ele_Col);
             }
         }
-
         // =============================================================
-        // 合計防御力の表示（攻撃側と同じ高さに合わせて配置）
+        // 合計防御力の表示 (ダメージ計算フェーズ等で表示)
         // =============================================================
         int totalDrawX = startX + 100;
-        int totalDrawY = 400; // 手札の少し上の位置
+        int totalDrawY = 400;
 
-        // 合計値を見やすくするための枠組みの座標用変数
         const int totalbox_x = 340;
         const int totalbox_y = 395;
         DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
         DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
 
-        int totalDefCol = Col.GetBla(); // デフォルト色
-        if (data.currentDefenseElement == "炎") { totalDefCol = GetColor(255, 0, 0); }
-        else if (data.currentDefenseElement == "水") { totalDefCol = GetColor(0, 0, 255); }
-        else if (data.currentDefenseElement == "木") { totalDefCol = GetColor(0, 155, 0); }
-        else if (data.currentDefenseElement == "光") { totalDefCol = GetColor(155, 155, 0); }
-        else if (data.currentDefenseElement == "闇") { totalDefCol = GetColor(255, 100, 255); }
-
-        // DrawFormatString ではなく DrawFormatStringToHandle を使う
-        DrawFormatStringToHandle(totalDrawX, totalDrawY, totalDefCol, Font.GetSmall(), _T("守 %d"), data.totalPower);
+        int totalDefCol = Col.GetBla();
+        // 属性による色変更ロジックは元のまま
+        DrawFormatStringToHandle(totalDrawX, totalDrawY, totalDefCol, Font.GetSmall(), _T("守 %d"), data.defenseTotalPower);
     }
 }
 
