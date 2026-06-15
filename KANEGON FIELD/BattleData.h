@@ -13,6 +13,7 @@ enum class BattlePhase {
 	DefenseReveal,    // 防御カード公開演出
 	Effect,           // ダメージ計算処理
 	DamageResult,     // 結果表示・演出
+	End,			  // 戦闘終了リザルト
 	Idle			  // カード破棄・ドロー・次ターン準備
 };
 
@@ -59,6 +60,23 @@ struct BattleData {
 	bool isHoverIdx[MAX];					// 各ボタンの上にマウスがあるか
 	bool isHoverCardIdx[CARD_MAX];			// カード枠の上にマウスがあるか
 	bool isHoverPlayerIdx[MEMBER_MAX];		// どのプレイヤー枠の上にマウスがあるか
+
+	// アニメーション表示用の枚数
+	int animAttackCardCount = 0;  // 攻撃側が出すカードの表示枚数
+	int animDefenseCardCount = 0; // 防御側が出すカードの表示枚数
+
+	// 選択ロックの配列（手札の数だけ用意し、ロジック側でtrue/falseを判定しておく）
+	std::vector<bool> isCardSelectable;
+
+	// ダメージや回復数値を表示するポップアップUI用の構造体
+	struct DamagePopup {
+		int playerIdx;       // 対象プレイヤー
+		std::string text;    // 数値テキスト
+		unsigned int color;  // 色
+		int offsetY;         // 上に昇るアニメーション用のY座標オフセット
+		int timer;           // 表示時間（0になったら消す）
+	};
+	std::vector<DamagePopup> popups; // 発生中のポップアップリスト
 
 	// データを初期状態に戻すための関数
 	void Clear() {

@@ -212,15 +212,16 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                 std::vector<int>& activeSelection = (data.currentPhase == BattlePhase::Select) ? data.selectedCards : data.selectedDefenseCards;
                 auto it = std::find(activeSelection.begin(), activeSelection.end(), i);
 
+                // 選択解除時の処理
                 if (it != activeSelection.end()) {
-                    // 選択解除
+                    // すでに選択されている場合
                     if (it == activeSelection.begin()) {
+                        // 1枚目をクリックしたら全解除
                         activeSelection.clear();
-                        if (data.currentPhase == BattlePhase::Select) data.currentAttackElement = "無";
                     }
                     else {
+                        // 2枚目以降ならそのカードだけ解除
                         activeSelection.erase(it);
-                        if (data.currentPhase == BattlePhase::Select) data.currentAttackElement = "再計算が必要";
                     }
                 }
                 else {
@@ -248,9 +249,6 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                         }
                         else if (baseCat != All && !isBaseHeal) {
                             activeSelection.push_back(i);
-                            if (data.currentPhase == BattlePhase::Select) {
-                                data.currentAttackElement = "再計算が必要";
-                            }
                         }
                     }
                 }

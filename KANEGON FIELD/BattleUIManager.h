@@ -63,5 +63,10 @@ private:
 
     // カード選択決定ボタンの描画(名前の下に薄い四角を表示するだけ)
     void DrawCardSelectButton(const bool* ishoverIdx)const;
+
+    void DrawEndScreen(const BattleData& data) const;
+
+    // ダメージ・回復のポップアップ描画
+    void DrawPopups(const BattleData& data) const;
 };
 

@@ -211,10 +211,6 @@ std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selec
             // 追加が光属性で、ベースが闇以外なら元の属性を維持(例 : 炎＋光＝炎)
             continue;
         }
-        else if (result == "光" && addType != "闇") {
-            // ベースが光属性で、追加が闇以外なら追加された属性になる(例 : 光＋炎＝炎)
-            result = addType;
-        }
         else {
             // それ以外の異なる属性が混ざった場合は無属性になる
             result = "無";
