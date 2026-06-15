@@ -9,14 +9,22 @@
 // 更新処理
 bool BattleInputManager::Update(BattleData& data, const InputManager& input, Player& humanPlayer, int humanIdx, bool isHumanTurn) {
     // 毎フレームの初期化
-    for (int i = 0; i < BattleOption::MAX; i++) {
-        data.isHoverIdx[i] = false;
-    }
+    std::fill(std::begin(data.isHoverIdx), std::end(data.isHoverIdx), false);
+    std::fill(std::begin(data.isHoverPlayerIdx), std::end(data.isHoverPlayerIdx), false);
+    std::fill(std::begin(data.isHoverCardIdx), std::end(data.isHoverCardIdx), false);
     data.hoveredCardIdx = -1;
+
+    // 降参画面が開いていたかを記憶する
+    bool wasSurrenderConfirm = data.isSurrenderConfirm;
 
     // 降参UIの処理（降参が確定したら即座に true を返して終了）
     if (ProcessSurrender(data, input)) {
         return true;
+    }
+
+    // 元々開いていた(閉じた瞬間)または今開いた瞬間なら、他の判定をスキップ
+    if (wasSurrenderConfirm || data.isSurrenderConfirm) {
+        return false;
     }
 
     // 攻撃/防御の決定ボタン処理

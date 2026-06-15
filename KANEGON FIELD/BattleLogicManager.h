@@ -32,4 +32,10 @@ private:
 
     // アニメーション処理
     void UpdateCardAnimation(BattleData& data);
+
+    // 攻撃・防御で共通して使う属性の合成ロジック
+    std::string GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand);
+
+    // UI側で防御カードを選択できるか判定する関数
+    bool CanSelectDefenseCard(const BattleData& data, const Player& defender, int cardIdx, const std::string& incomingAttackElement);
 };

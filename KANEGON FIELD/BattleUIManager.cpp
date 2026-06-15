@@ -7,6 +7,16 @@
 extern Picture Pic;
 extern FontManager Font;
 
+// 属性の色処理を関数化
+unsigned int BattleUIManager::GetElementColor(const std::string& elementType) const {
+    if (elementType == "炎") return GetColor(255, 0, 0);
+    if (elementType == "水") return GetColor(0, 0, 255);
+    if (elementType == "木") return GetColor(0, 155, 0);
+    if (elementType == "光") return GetColor(155, 155, 0);
+    if (elementType == "闇") return GetColor(255, 100, 255);
+    return Col.GetBla(); // デフォルト色
+}
+
 void BattleUIManager::Draw(const BattleData& data) const {
     // プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
     if (data.Player_Turn.empty()) {
@@ -211,12 +221,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         DrawBox(x, y, x + CARD_W, y + CARD_H, Col.GetBla(), FALSE);
 
         // 属性効果のあるカードのフォントカラーを変更する分岐
-        int Ele_Col = Col.GetBla();
-        if (hand[i].GetType() == "炎") { Ele_Col = GetColor(255, 0, 0); }
-        else if (hand[i].GetType() == "水") { Ele_Col = GetColor(0, 0, 255); }
-        else if (hand[i].GetType() == "木") { Ele_Col = GetColor(0, 155, 0); }
-        else if (hand[i].GetType() == "光") { Ele_Col = GetColor(155, 155, 0); }
-        else if (hand[i].GetType() == "闇") { Ele_Col = GetColor(255, 100, 255); }
+        int Ele_Col = GetElementColor(hand[i].GetType());
 
         // テキストエリアの設定（カードのすぐ下に配置）
         int textAreaY = y + CARD_H;
@@ -381,12 +386,7 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
         int textX = drawX + CARD_W + 15;
 
         // 属性色の取得
-        int Ele_Col = Col.GetBla();
-        if (card.GetType() == "炎") { Ele_Col = GetColor(255, 0, 0); }
-        else if (card.GetType() == "水") { Ele_Col = GetColor(0, 0, 255); }
-        else if (card.GetType() == "木") { Ele_Col = GetColor(0, 155, 0); }
-        else if (card.GetType() == "光") { Ele_Col = GetColor(155, 155, 0); }
-        else if (card.GetType() == "闇") { Ele_Col = GetColor(255, 100, 255); }
+        int Ele_Col = GetElementColor(hand[i].GetType());
 
         // カテゴリ別文字描画
         TCHAR buf[64] = _T("");
@@ -597,12 +597,7 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
             int textX = drawX + CARD_W + 15;
 
             // 3. 属性色の取得
-            int Ele_Col = Col.GetBla();
-            if (card.GetType() == "炎") { Ele_Col = GetColor(255, 0, 0); }
-            else if (card.GetType() == "水") { Ele_Col = GetColor(0, 0, 255); }
-            else if (card.GetType() == "木") { Ele_Col = GetColor(0, 155, 0); }
-            else if (card.GetType() == "光") { Ele_Col = GetColor(155, 155, 0); }
-            else if (card.GetType() == "闇") { Ele_Col = GetColor(255, 100, 255); }
+            int Ele_Col = GetElementColor(hand[i].GetType());
 
             // 4. カテゴリごとの文字描画
             TCHAR buf[64] = _T("");

@@ -190,6 +190,39 @@ void BattleLogicManager::Update(BattleData& data) {
     }
 }
 
+// 共通の属性加算関数
+std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
+    if (selectedIdxs.empty()) return "無";
+
+    // 1枚目をベースにする
+    std::string result = hand[selectedIdxs[0]].GetType();
+    if (result == "") result = "無";
+
+    // 2枚目以降の合成処理
+    for (size_t i = 1; i < selectedIdxs.size(); ++i) {
+        std::string addType = hand[selectedIdxs[i]].GetType();
+        if (addType == "") addType = "無";
+
+        if (result == addType) {
+            // 同じ属性同士の加算(例 : 炎＋炎＝炎)はそのまま
+            continue;
+        }
+        else if (addType == "光" && result != "闇") {
+            // 追加が光属性で、ベースが闇以外なら元の属性を維持(例 : 炎＋光＝炎)
+            continue;
+        }
+        else if (result == "光" && addType != "闇") {
+            // ベースが光属性で、追加が闇以外なら追加された属性になる(例 : 光＋炎＝炎)
+            result = addType;
+        }
+        else {
+            // それ以外の異なる属性が混ざった場合は無属性になる
+            result = "無";
+        }
+    }
+    return result;
+}
+
 void BattleLogicManager::UpdateCardAnimation(BattleData& data) {
     float targetYOffset = 65.0f;
     size_t count = 0;
@@ -259,11 +292,8 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
     if (data.selectedCards.empty()) return total;
     if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
 
-    // 1枚目の属性をベースにする
-    std::string currentElement = hand[data.selectedCards[0]].GetType();
-    if (currentElement == "") currentElement = _T("無");
-
-    bool hasNonLightAddition = false;
+    // 新しい共通関数で属性を一発取得
+    total.type = GetCombinedElement(data.selectedCards, hand);
 
     for (size_t i = 0; i < data.selectedCards.size(); i++) {
         int index = data.selectedCards[i];
@@ -276,59 +306,43 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
             continue;
         }
 
-        // 威力を加算
+        // 合計威力を計算
         total.power += card.GetPower();
 
-        // 全体攻撃(All)の判定
         if (card.GetCategory() == All) {
             total.isAll = true;
             total.hitPercent = card.GetPercent();
         }
-
-        // 属性チェック
-        if (i > 0) {
-            std::string addType = card.GetType();
-            if (addType == "") addType = _T("無");
-            if (addType != _T("光")) {
-                hasNonLightAddition = true;
-            }
-        }
     }
-
-    // 最終的な属性を適用
-    total.type = currentElement;
 
     return total;
 }
 
 void BattleLogicManager::ResolveDamage(BattleData& data, Player& target, const TotalAttack& attack, const TotalDefense& defense) {
-    
-    // 命中判定（全体攻撃などのフラグ判定）
+    // --- UIと同期するために属性をセット ---
+    data.currentAttackElement = attack.type;
+
+    // --- 命中判定 ---
     if (attack.isAll) {
-        if ((rand() % 100) > attack.hitPercent) {
-            // Miss! ダメージ処理を行わず終了
-            return;
-        }
+        if ((rand() % 100) > attack.hitPercent) return;
     }
 
     int finalDamage = attack.power;
 
-    // ガード判定ロジック
-    // defense構造体のフラグと属性を使用して判定
+    // --- ガード判定（ここで防御カードのみを対象にする） ---
     if (defense.isActive) {
-        // DamageResolverの相性チェックを呼び出す
+        // ここで「カテゴリが防御であること」を確認するガード節を追加
         if (DamageResolver::IsValidGuard(attack.type, defense.type)) {
-            finalDamage = (std::max)(0, finalDamage - defense.power);
-        }
-        else {
-            // ガード失敗（相性不良）：貫通。ダメージはそのまま
+
+            // ガード成功なら攻撃力から減算
+            finalDamage -= defense.power;
         }
     }
 
     // ダメージがマイナスにならないように
     if (finalDamage < 0) finalDamage = 0;
 
-    // 3. 闇属性の特殊ルール
+    // 闇属性の特殊ルール
     if (attack.type == "闇") {
         if (finalDamage > 0) {
             target.setHp(0);
@@ -336,7 +350,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& target, const T
         }
     }
     else {
-        // 4. 通常ダメージ適用
+        // 通常ダメージ適用
         target.setHp(target.getHp() - finalDamage);
         if (target.getHp() <= 0) {
             target.setHp(0);
@@ -346,40 +360,8 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& target, const T
 }
 
 void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::vector<Card>& hand) {
-    if (data.selectedCards.empty()) {
-        data.currentAttackElement = _T("無");
-        return;
-    }
-
-    // 1枚目をベースにする（念のためインデックス範囲チェック）
-    int firstIdx = data.selectedCards[0];
-    if (firstIdx < 0 || firstIdx >= (int)hand.size()) {
-        data.currentAttackElement = _T("無");
-        return;
-    }
-
-    std::string currentElement = hand[firstIdx].GetType();
-    if (currentElement == "") currentElement = _T("無");
-
-    bool hasNonLightAddition = false;
-
-    // 2枚目以降をチェックして状態を更新していく
-    for (size_t i = 1; i < data.selectedCards.size(); ++i) {
-        std::string addType = hand[data.selectedCards[i]].GetType();
-        if (addType == "") addType = _T("無");
-
-        if (addType != _T("光")) {
-            hasNonLightAddition = true;
-        }
-    }
-
-    // 最終的な表示属性を決定
-    if (hasNonLightAddition) {
-        data.currentAttackElement = _T("無");
-    }
-    else {
-        data.currentAttackElement = currentElement;
-    }
+    // 共通関数を使って簡略化
+    data.currentAttackElement = GetCombinedElement(data.selectedCards, hand);
 }
 
 TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player& defender) {
@@ -394,7 +376,7 @@ TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player&
         return total;
     }
 
-    // ★安全ガード：選んだカードが手札の範囲外なら強制リターン
+    // 選んだカードが手札の範囲外なら強制リターン
     if (data.selectedDefenseCards[0] < 0 || data.selectedDefenseCards[0] >= (int)hand.size()) {
         total.type = _T("無");
         return total;
@@ -402,80 +384,36 @@ TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player&
 
     total.isActive = true;
 
-    // 1枚目をベースにする
-    std::string currentElement = hand[data.selectedDefenseCards[0]].GetType();
-    if (currentElement == "") currentElement = _T("無");
+    // 共通関数で属性を取得
+    total.type = GetCombinedElement(data.selectedDefenseCards, hand);
 
-    // 選択された防御カードを順に処理
     for (size_t i = 0; i < data.selectedDefenseCards.size(); ++i) {
         int index = data.selectedDefenseCards[i];
         if (index < 0 || index >= (int)hand.size()) continue;
 
-        const Card& card = hand[index];
-
         // 防御力を加算
-        total.power += card.GetPower();
-
-        // 2枚目以降の属性チェック
-        if (i > 0) {
-            std::string addType = card.GetType();
-            if (addType == "") addType = _T("無");
-
-            if (addType == currentElement) {
-                // 同じ属性同士はそのまま維持
-            }
-            else if (addType == _T("光")) {
-                // 追加が「光」の場合、現在の属性をそのまま維持
-            }
-            else if (currentElement == _T("光")) {
-                // 現在が「光」で、追加が「光以外」なら上書き
-                currentElement = addType;
-            }
-            else {
-                // 違う属性が混ざった場合は無になる
-                currentElement = _T("無");
-            }
-        }
+        total.power += hand[index].GetPower();
     }
-
-    total.type = currentElement;
     return total;
 }
 
 void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand) {
-    // 選択された防御カードがない場合は無属性
-    if (data.selectedDefenseCards.empty()) {
-        data.currentDefenseElement = _T("無");
-        return;
-    }
+    // 共通関数を使って簡略化
+    data.currentDefenseElement = GetCombinedElement(data.selectedDefenseCards, hand);
+}
 
-    // 安全ガード
-    if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return;
+// 防御カードの選択可否を判定（UI入力制限用）
+bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const Player& defender, int cardIdx, const std::string& incomingAttackElement) {
+    auto& hand = defender.Hand.GetCards();
+    if (cardIdx < 0 || cardIdx >= (int)hand.size()) return false;
 
-    // 防御の場合は1枚目（ベース）の属性を取得
-    std::string element = hand[data.selectedDefenseCards[0]].GetType();
-    if (element == "") element = _T("無");
+    // 現在選択されている防御カードに、試しにクリックしたカードを追加してみる
+    std::vector<int> tempSelected = data.selectedDefenseCards;
+    tempSelected.push_back(cardIdx);
 
-    // 2枚目以降をチェックして状態を更新していく
-    for (size_t i = 1; i < data.selectedDefenseCards.size(); ++i) {
-        std::string addType = hand[data.selectedDefenseCards[i]].GetType();
-        if (addType == "") addType = _T("無");
+    // その状態での属性を計算
+    std::string hypotheticalElement = GetCombinedElement(tempSelected, hand);
 
-        if (addType == element) {
-            // 同じ属性同士はそのまま維持
-        }
-        else if (addType == _T("光")) {
-            // 追加が「光」の場合、現在の属性（炎、水、無など）をそのまま維持
-        }
-        else if (element == _T("光")) {
-            // 現在が「光」で、追加が「光以外」なら上書き（光＋炎＝炎、光＋無＝無）
-            element = addType;
-        }
-        else {
-            // 違う属性が混ざった場合は無になる
-            element = _T("無");
-        }
-    }
-
-    data.currentDefenseElement = element;
+    // 出来上がった属性で、敵の攻撃を防げるかを判定
+    return DamageResolver::IsValidGuard(incomingAttackElement, hypotheticalElement);
 }

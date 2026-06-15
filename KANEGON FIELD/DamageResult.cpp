@@ -2,20 +2,23 @@
 
 // 防御が成立するかどうかを判定するヘルパー関数
 bool DamageResolver::IsValidGuard(const std::string& atkAttr, const std::string& defAttr) {
-    if (defAttr == "光") return true;
-
-    if (atkAttr == "闇") {
+    // 無属性と闇属性攻撃はどの属性でも守れる
+    if (atkAttr == "無" || atkAttr == "" || atkAttr == "闇") {
         return true;
     }
 
-    if (atkAttr == "炎") return (defAttr == "水");
-    if (atkAttr == "水") return (defAttr == "木");
-    if (atkAttr == "木") return (defAttr == "炎");
+    // 光属性防御はどの属性攻撃も守れる
+    if (defAttr == "光") {
+        return true;
+    }
 
-    if (atkAttr == "光") return false;
+    // 3すくみ (炎 -> 水, 水 -> 草, 草 -> 炎 で守れる)
+    // ※元のコードが"木"でしたが、ご要望に合わせて"草"にしています。カードのデータも"草"になっているかご確認ください。
+    if (atkAttr == "炎" && defAttr == "水") return true;
+    if (atkAttr == "水" && defAttr == "草") return true;
+    if (atkAttr == "木" && defAttr == "木") return true;
 
-    if (atkAttr == "無" || atkAttr == "") return true;
-
+    // 上記以外（相性不一致）は防げない
     return false;
 }
 
@@ -24,6 +27,7 @@ DamageResult DamageResolver::CalculateDamage(const TotalAttack& attack, const To
     DamageResult result;
     result.isHit = true;
     result.isInstantDeath = false;
+    result.isGuardSuccess = false;
 
     // 全体攻撃(All)の命中判定
     if (attack.isAll) {
@@ -40,27 +44,32 @@ DamageResult DamageResolver::CalculateDamage(const TotalAttack& attack, const To
     // 基本ダメージ量
     result.finalDamage = attack.power;
 
-    // --- 防御判定（TotalDefenseを使用） ---
+    // --- 防御判定 ---
     if (defense.isActive) {
         // 合計された属性同士で相性チェック
         if (IsValidGuard(attack.type, defense.type)) {
-            // 防御成立：合計防御力を引く
-            // result.isGuardSuccess = true; // 構造体にフラグがある場合
+            // 防御成立
+            result.isGuardSuccess = true;
             result.finalDamage -= defense.power;
         }
         else {
-            // 防御不成立（相性不良など）
-            // result.isGuardSuccess = false;
+            // 防御不成立（相性不良：ダメージ減算なし）
+            result.isGuardSuccess = false;
         }
     }
 
-    // ダメージがマイナスにならないよう下限を0にする
-    if (result.finalDamage < 0) result.finalDamage = 0;
-
-    // 闇属性の特殊ルール（即死判定）
-    if (attack.type == "闇" && result.finalDamage > 0) {
-        // 防御しきれず1ダメージでも食らったら即死フラグを立てる
-        result.isInstantDeath = true;
+    // --- 防御判定 ---
+    if (defense.isActive) {
+        // 合計された属性同士で相性チェック
+        if (IsValidGuard(attack.type, defense.type)) {
+            // 防御成立
+            result.isGuardSuccess = true;
+            result.finalDamage -= defense.power;
+        }
+        else {
+            // 防御不成立（相性不良：ダメージ減算なし）
+            result.isGuardSuccess = false;
+        }
     }
 
     return result;

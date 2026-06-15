@@ -30,6 +30,10 @@ public:
     void Draw(const BattleData& data)const;
 
 private:
+
+    // 属性の色処理関数
+    unsigned int GetElementColor(const std::string& elementType) const;
+
     // プレイヤーステータスの描画
     void DrawPlayerStatus(const BattleData& data, const bool* isHoverPlayerIdx)const;
 
