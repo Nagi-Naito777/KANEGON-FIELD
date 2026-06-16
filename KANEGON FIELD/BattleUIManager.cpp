@@ -59,6 +59,7 @@ void BattleUIManager::Draw(const BattleData& data) const {
     // 攻撃カードの描画 (セレクト開始?ダメージ計算完了までずっと表示)
     if (data.currentPhase == BattlePhase::Select ||
         data.currentPhase == BattlePhase::DefenseSelect ||
+        data.currentPhase == BattlePhase::Effect ||
         data.currentPhase == BattlePhase::DamageResult) {
 
         // 攻撃側プレイヤーの手札データを渡す
@@ -67,6 +68,7 @@ void BattleUIManager::Draw(const BattleData& data) const {
 
     // 防御カードの描画 (防衛セレクト開始?ダメージ計算完了までずっと表示)
     if (data.currentPhase == BattlePhase::DefenseSelect ||
+        data.currentPhase == BattlePhase::Effect ||
         data.currentPhase == BattlePhase::DamageResult) {
 
         if (data.targetIdx >= 0 && data.targetIdx < data.Player_Turn.size()) {
@@ -366,10 +368,6 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& player,
     float currentYOffset)const {
 
-    // 【デバッグ用】画面に値を表示して確認する
-    DrawFormatString(0, 0, GetColor(255, 0, 0), "Selected: %d, AnimCount: %d",
-        (int)data.selectedCards.size(), data.animAttackCardCount);
-
     // まだカードが選ばれていない、または手札の範囲外なら何もしない
     if (data.selectedCards.empty())return;
 
@@ -387,14 +385,17 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
     // UIボックスの固定サイズ
     const int boxWidth = 250;
 
-    const int limitY = 440; // 手札UI（450）の手前で止める制限ライン
+    const int limitY = 390; // 手札UI（450）の手前で止める制限ライン
 
+    // 動的なYオフセット計算
     int count = (int)data.selectedCards.size();
-    
-    int safeYOffset = (count > 1) ? (limitY - startY - CARD_H) / (count - 1) : 40;
-    int yOffset = (std::min)((int)currentYOffset, safeYOffset);
+    // カード同士の隙間を計算
+    int availableSpace = limitY - startY - CARD_H;
+    int safeYOffset = (count > 1) ? (availableSpace / (count - 1)) : 40;
 
-    // アニメーション無視して、選択されているカードを全部表示する
+    // 指定されたアニメーション値と、収まるための値の小さい方を採用
+    int activeYOffset = (std::min)((int)currentYOffset, safeYOffset);
+
     int maxDrawCount = (int)data.selectedCards.size();
 
     // ベースカード（1枚目）の属性を事前に取得しておく
@@ -411,7 +412,7 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
             const auto& card = hand[handIdx];
 
             int drawX = startX;
-            int drawY = startY + (i * yOffset); // アニメーションするyOffsetで配置
+            int drawY = startY + (i * activeYOffset);
 
             // 背面のテキストエリア（UIボックス）の描画
             DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBoxYel(), TRUE);
@@ -425,7 +426,7 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
             DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);
 
             // 加算カードの属性色引き継ぎロジック
-            int Ele_Col = GetElementColor(hand[i].GetType());
+            int Ele_Col = GetElementColor(card.GetType());
 
             int textX = drawX + CARD_W + 15;
 
@@ -604,7 +605,7 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     // 描画開始座標 (ターゲット名の下)
     int startX = 350;
     int startY = 95;
-    const int limitY = 440; // 画面下限（手札エリアに被らないギリギリの位置）
+    const int limitY = 340; // 画面下限（手札エリアに被らないギリギリの位置）
     const int boxWidth = 250;
     int yOffset = (int)currentYOffset;
 
@@ -613,10 +614,12 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     const int CARD_W = (int)(50 * SCALE);
     const int CARD_H = (int)(50 * SCALE);
 
-    // --- 【修正】動的なYオフセット計算 ---
+    // --- 動的なYオフセット計算 ---
     int count = (int)data.selectedDefenseCards.size();
-    // 全カードが limitY 以内に収まるための安全な間隔を計算
-    int safeYOffset = (count > 1) ? (limitY - startY - CARD_H) / (count - 1) : 40;
+
+    // safeYOffset が正しく計算されるよう、分子を (limitY - startY - CARD_H) に
+    int availableSpace = limitY - startY - CARD_H;
+    int safeYOffset = (count > 1) ? (availableSpace / (count - 1)) : 40;
     // 指定されたアニメーション値と、収まるための値の小さい方を採用
     int activeYOffset = (std::min)((int)currentYOffset, safeYOffset);
 
@@ -632,7 +635,7 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
         if (handIdx >= 0 && handIdx < (int)hand.size()) {
             const auto& card = hand[handIdx];
             int drawX = startX;
-            int drawY = startY + (i * yOffset);
+            int drawY = startY + (i * activeYOffset);
 
             // 背面のテキストエリアの描画
             DrawBox(drawX - 5, drawY - 5, drawX + boxWidth, drawY + CARD_H + 5, Col.GetBoxYel(), TRUE);
