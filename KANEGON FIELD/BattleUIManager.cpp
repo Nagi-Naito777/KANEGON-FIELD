@@ -387,8 +387,12 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
     // UIボックスの固定サイズ
     const int boxWidth = 250;
 
-    // アニメーション変数(Updateで計算されたものを適用)
-    int yOffset = (int)currentYOffset;
+    const int limitY = 440; // 手札UI（450）の手前で止める制限ライン
+
+    int count = (int)data.selectedCards.size();
+    
+    int safeYOffset = (count > 1) ? (limitY - startY - CARD_H) / (count - 1) : 40;
+    int yOffset = (std::min)((int)currentYOffset, safeYOffset);
 
     // アニメーション無視して、選択されているカードを全部表示する
     int maxDrawCount = (int)data.selectedCards.size();
@@ -600,6 +604,7 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     // 描画開始座標 (ターゲット名の下)
     int startX = 350;
     int startY = 95;
+    const int limitY = 440; // 画面下限（手札エリアに被らないギリギリの位置）
     const int boxWidth = 250;
     int yOffset = (int)currentYOffset;
 
@@ -608,9 +613,12 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     const int CARD_W = (int)(50 * SCALE);
     const int CARD_H = (int)(50 * SCALE);
 
-    // --- 合計用の属性色を事前に計算する ---
-    std::string baseType = hand[data.selectedDefenseCards[0]].GetType();
-    int totalEleCol = GetElementColor(baseType);
+    // --- 【修正】動的なYオフセット計算 ---
+    int count = (int)data.selectedDefenseCards.size();
+    // 全カードが limitY 以内に収まるための安全な間隔を計算
+    int safeYOffset = (count > 1) ? (limitY - startY - CARD_H) / (count - 1) : 40;
+    // 指定されたアニメーション値と、収まるための値の小さい方を採用
+    int activeYOffset = (std::min)((int)currentYOffset, safeYOffset);
 
     // 選択フェーズなら全表示、演出フェーズならカウント分だけ表示
     int maxDrawCount = (int)data.selectedDefenseCards.size(); // 基本は全表示
@@ -669,6 +677,9 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
         // =============================================================
         // 合計防御力の表示 (ダメージ計算フェーズ等で表示)
         // =============================================================
+        std::string baseType = hand[data.selectedDefenseCards[0]].GetType();
+        int totalEleCol = GetElementColor(baseType);
+
         int totalDrawX = startX + 100;
         int totalDrawY = 400;
 
