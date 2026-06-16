@@ -222,7 +222,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         // カード画像の描画
         int picIdx = hand[i].graphicIndex;
 
-        if (picIdx >= 0 && picIdx < 100) {
+        if (picIdx >= 0 && picIdx < CARD_KIND) {
             // もしマウスカーソルが重なった時は若干白くさせる
             if (isHoverCardIdx[i]) {
                 // ブレンドモードを「加算」に設定（0?255で白さの強さを調節）
@@ -334,7 +334,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         int card_txt_y = 460;
         DrawFormatString(card_txt_x, card_txt_y, Col.GetBla(), _T("[%s]"), card.GetName().c_str());
 
-        // --- 4. 説明文の描画 (画像の右側に改行して表示) ---
+        // --- 説明文の描画 (画像の右側に改行して表示) ---
         int textX = imgX + img_w + PADDING;
         int textY = imgY;
 
@@ -365,6 +365,11 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 // 選択されたカードを描画する関数
 void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& player,
     float currentYOffset)const {
+
+    // 【デバッグ用】画面に値を表示して確認する
+    DrawFormatString(0, 0, GetColor(255, 0, 0), "Selected: %d, AnimCount: %d",
+        (int)data.selectedCards.size(), data.animAttackCardCount);
+
     // まだカードが選ばれていない、または手札の範囲外なら何もしない
     if (data.selectedCards.empty())return;
 
@@ -385,8 +390,15 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
     // アニメーション変数(Updateで計算されたものを適用)
     int yOffset = (int)currentYOffset;
 
-    // data.animAttackCardCount の枚数までしか描画しない (Update関数でカウントを増やす)
-    int maxDrawCount = (std::min)((int)data.selectedCards.size(), data.animAttackCardCount);
+    // アニメーション無視して、選択されているカードを全部表示する
+    int maxDrawCount = (int)data.selectedCards.size();
+
+    // ベースカード（1枚目）の属性を事前に取得しておく
+    int baseIdx = data.selectedCards[0];
+    std::string baseElement = "無";
+    if (baseIdx >= 0 && baseIdx < (int)hand.size()) {
+        baseElement = hand[baseIdx].GetType();
+    }
 
     // --- 選択されたすべてのカードを縦リストとして描画 ---
     for (int i = 0; i < maxDrawCount; ++i) {
@@ -408,10 +420,10 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
             }
             DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);
 
-            int textX = drawX + CARD_W + 15;
+            // 加算カードの属性色引き継ぎロジック
+            int Ele_Col = GetElementColor(hand[i].GetType());
 
-            // 属性色の取得
-            int Ele_Col = GetElementColor(card.GetType());
+            int textX = drawX + CARD_W + 15;
 
             // カテゴリ別文字描画
             TCHAR buf[64] = _T("");
@@ -454,9 +466,9 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
     }
 
     // 合計威力の表示（手札一覧の少し上に表示。ここも連動して滑らかに動きます） 
-    int baseIdx = data.selectedCards[0];
-    if (baseIdx < 0 || baseIdx >= (int)hand.size()) return;
-    CardCategory baseCat = hand[baseIdx].GetCategory();
+    int BaseIdx = data.selectedCards[0];
+    if (BaseIdx < 0 || BaseIdx >= (int)hand.size()) return;
+    CardCategory baseCat = hand[BaseIdx].GetCategory();
     if (baseCat == Healing || baseCat == MagicHealing) return;
 
     // 表示に必要な変数の準備
@@ -600,8 +612,12 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     std::string baseType = hand[data.selectedDefenseCards[0]].GetType();
     int totalEleCol = GetElementColor(baseType);
 
-    // --- 選択されたすべての防御カードを描画 ---
-    int maxDrawCount = (std::min)((int)data.selectedDefenseCards.size(), data.animDefenseCardCount);
+    // 選択フェーズなら全表示、演出フェーズならカウント分だけ表示
+    int maxDrawCount = (int)data.selectedDefenseCards.size(); // 基本は全表示
+    if (data.currentPhase == BattlePhase::DefenseReveal) {
+        // 演出中のみカウントによる制限をかける
+        maxDrawCount = (std::min)((int)data.selectedDefenseCards.size(), data.animDefenseCardCount);
+    }
 
     for (int i = 0; i < maxDrawCount; ++i) {
         int handIdx = data.selectedDefenseCards[i];

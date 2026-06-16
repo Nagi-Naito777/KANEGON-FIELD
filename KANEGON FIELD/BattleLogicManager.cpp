@@ -27,6 +27,8 @@ void BattleLogicManager::Update(BattleData& data) {
         else {
             if (data.revealIndex < data.selectedCards.size()) {
                 data.revealIndex++;
+                // UI用カウントを同期
+                data.animAttackCardCount = data.revealIndex;
                 data.animationTimer = 30; // 次のカードを開くまでの時間
             }
             else {
@@ -56,6 +58,8 @@ void BattleLogicManager::Update(BattleData& data) {
         else {
             if (data.revealIndex < (int)data.selectedDefenseCards.size()) {
                 data.revealIndex++;
+                // UI用カウントを同期
+                data.animDefenseCardCount = data.revealIndex;
                 data.animationTimer = 30; // 次の防御カードを開くまでの時間
             }
             else {
@@ -257,6 +261,8 @@ void BattleLogicManager::NextTurn(BattleData& data) {
     data.playerTarget = false;
     data.targetIdx = -1;
     data.revealIndex = 0;
+    data.animAttackCardCount = 0;
+    data.animDefenseCardCount = 0;
 
     data.currentPhase = BattlePhase::Select;
 }

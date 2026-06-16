@@ -135,9 +135,11 @@ void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManag
         data.isHoverIdx[BattleOption::DEFENSE] = input.IsMouseOver(DEF_BTN_X, DEF_BTN_Y, DECISION_AREA_W, DECISION_AREA_H);
 
         if (input.IsLeftClicked() && data.isHoverIdx[BattleOption::DEFENSE]) {
+            // ここで次の「演出フェーズ」へ移行する
             data.currentPhase = BattlePhase::DefenseReveal;
-            data.revealIndex = 0;
-            data.animationTimer = 15;
+            data.revealIndex = 0;             // インデックスを0にリセット
+            data.animDefenseCardCount = 0;    // カウントもリセット
+            data.animationTimer = 0;          // 即座に開始
         }
     }
 }
