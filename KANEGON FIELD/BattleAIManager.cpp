@@ -29,10 +29,8 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 		// --- 手札から【MPが足りる】かつ【一番強い】武器や魔法を選ぶ ---
 		for (int i = 0; i < (int)hand.size(); ++i) {
 			CardCategory cat = hand[i].GetCategory();
-			// 防御カードはベースにしない
-			if (cat != Defense && (cat == Attack || cat == Magic || cat == Bilingual) && hand[i].GetMP() <= currentMp) {
-				// MPが足りているかも上のif文でチェック
-
+			// 防御・回復系はベースにしない
+			if (cat != Defense && cat != Healing && cat != MagicHealing && hand[i].GetMP() <= currentMp) {
 				// より攻撃力が高いカードを記憶する
 				if (hand[i].GetPower() > maxPower) {
 					maxPower = hand[i].GetPower();
@@ -52,17 +50,21 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 				if (i == bestIndex) continue;
 
 				CardCategory cat = hand[i].GetCategory();
-				// 防御カードは絶対に追加しない。かつ加算可能カードのみ。
-				bool isDefensive = (cat == Defense);
-				if (!isDefensive && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
+				// 加算可能なカテゴリ（Attack, Magic のみ）に限定する
+				// 攻防(Bilingual)、全体(All)、回復(Healing, MagicHealing)、防御(Defense)は加算させない
+				bool isAddableCategory = (cat == Attack || cat == Magic);
+
+				if (isAddableCategory && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
 					data.selectedCards.push_back(i);
 					currentMp -= hand[i].GetMP();
 					totalPower += hand[i].GetPower();
+
+					// 重ね掛けで攻撃の属性を変える仕様の場合、ここで属性を上書きします
+					data.currentAttackElement = hand[i].GetType();
 				}
 			}
 
 			data.attackTotalPower = totalPower;
-			data.currentAttackElement = hand[bestIndex].GetType(); // ベースカードの属性
 
 			// 生きている敵（自分以外）からランダムにターゲットを選ぶ
 			std::vector<int> aliveEnemies;
@@ -105,7 +107,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 	// =============================================================
 	else if (data.currentPhase == BattlePhase::DefenseSelect) {
 
-		// 攻撃のターゲットが人間以外（＝AIが防御する番）かチェック
+		// 攻撃のターゲットが人間以外（AIが防御する番）かチェック
 		if (data.targetIdx != humanIdx && data.targetIdx >= 0 && data.targetIdx < (int)data.Player_Turn.size()) {
 
 			Player& targetPlayer = data.Player_Turn[data.targetIdx];
@@ -113,19 +115,28 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 
 			int currentMp = targetPlayer.getMp();
 			std::string incomingElement = data.currentAttackElement;
+			int totalDefensePower = 0; // 合計防御力用の変数を追加
+
+			// AI（防御側）の手札を取得する
+			const auto& targetHand = targetPlayer.Hand.GetCards();
 
 			// 属性で守れるカードを探してコンボにする
-			for (int i = 0; i < (int)hand.size(); ++i) {
-				CardCategory cat = hand[i].GetCategory();
-				if ((cat == Defense || cat == Bilingual) && hand[i].GetMP() <= currentMp) {
+			for (int i = 0; i < (int)targetHand.size(); ++i) {
+				CardCategory cat = targetHand[i].GetCategory();
+
+				// 守れるカテゴリのみ
+				if ((cat == Defense || cat == Bilingual) && targetHand[i].GetMP() <= currentMp) {
 
 					// 防御属性が合致する場合のみ追加
-					if (DamageResolver::IsValidGuard(incomingElement, hand[i].GetType())) {
+					if (DamageResolver::IsValidGuard(incomingElement, targetHand[i].GetType())) {
 						data.selectedDefenseCards.push_back(i);
-						currentMp -= hand[i].GetMP();
+						currentMp -= targetHand[i].GetMP();
+						totalDefensePower += targetHand[i].GetPower(); // 防御力を加算
 					}
 				}
 			}
+
+			data.defenseTotalPower = totalDefensePower; // 計算した防御力をデータにセットする
 
 			// 公開フェーズへ移行
 			data.currentPhase = BattlePhase::DefenseReveal;
