@@ -173,7 +173,9 @@ void BattleLogicManager::Update(BattleData& data) {
         int miracleUsageCount = 0;
         for (int idx : data.selectedCards) {
             if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
+                const Card& card = attacker.Hand.GetCards()[idx];
                 if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                    attacker.setMp(attacker.getMp() - card.GetMP());
                     miracleUsageCount++;
                 }
             }
@@ -206,7 +208,10 @@ void BattleLogicManager::Update(BattleData& data) {
             int defMiracleCount = 0;
             for (int idx : data.selectedDefenseCards) {
                 if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
-                    if (target.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+                    const Card& card = target.Hand.GetCards()[idx];
+                    if (card.GetCategory() == CardCategory::Magic) {
+                        // ŠïÕƒJ[ƒh‚ÌMPÁ”ï
+                        target.setMp(target.getMp() - card.GetMP());
                         defMiracleCount++;
                     }
                 }
