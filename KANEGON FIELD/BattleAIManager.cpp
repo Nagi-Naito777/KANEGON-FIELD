@@ -21,83 +21,120 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 		data.selectedCards.clear();
 
 		int currentMp = turnPlayer.getMp();
-		int totalPower = 0;
+		// 攻撃用と回復用のベストなカードを記録する変数
+		int bestAttackIndex = -1;
+		int maxAttackPower = -1;
 
-		int bestIndex = -1;
-		int maxPower = -1;
+		int bestHealIndex = -1;
+		int maxHealPower = -1;
 
-		// --- 手札から【MPが足りる】かつ【一番強い】武器や魔法を選ぶ ---
+		// --- 手札から【MPが足りる】かつ【一番強い】攻撃カードと回復カードを探す ---
 		for (int i = 0; i < (int)hand.size(); ++i) {
+			if (hand[i].GetMP() > currentMp) continue; // MP不足は除外
+
 			CardCategory cat = hand[i].GetCategory();
-			// 防御・回復系はベースにしない
-			if (cat != Defense && cat != Healing && cat != MagicHealing && hand[i].GetMP() <= currentMp) {
-				// より攻撃力が高いカードを記憶する
-				if (hand[i].GetPower() > maxPower) {
-					maxPower = hand[i].GetPower();
-					bestIndex = i;
+
+			if (cat == Healing || cat == MagicHealing) {
+				// 回復カードの候補
+				if (hand[i].GetPower() > maxHealPower) {
+					maxHealPower = hand[i].GetPower();
+					bestHealIndex = i;
+				}
+			}
+			else if (cat != Defense) {
+				// 攻撃・魔法・全体などの攻撃系カードの候補
+				if (hand[i].GetPower() > maxAttackPower) {
+					maxAttackPower = hand[i].GetPower();
+					bestAttackIndex = i;
 				}
 			}
 		}
 
-		// --- 攻撃カードが選べた場合 ---
+		bool useHeal = false;
+		int bestIndex = -1;
+
+		// --- 行動の決定（回復か攻撃か） ---
+		if (bestHealIndex != -1 && bestAttackIndex != -1) {
+			// 両方持っている場合はランダムで決定
+			// ※プレイヤーのHPを取得できるなら「if (HPが減っていたら) useHeal = true;」とするのがオススメです
+			useHeal = (rand() % 2 == 0);
+			bestIndex = useHeal ? bestHealIndex : bestAttackIndex;
+		}
+		else if (bestHealIndex != -1) {
+			useHeal = true;
+			bestIndex = bestHealIndex;
+		}
+		else if (bestAttackIndex != -1) {
+			useHeal = false;
+			bestIndex = bestAttackIndex;
+		}
+
+		// --- カードが選べた場合 ---
 		if (bestIndex != -1) {
 			data.selectedCards.push_back(bestIndex);
 			currentMp -= hand[bestIndex].GetMP();
-			totalPower += hand[bestIndex].GetPower();
+			int totalPower = hand[bestIndex].GetPower();
 
-			// 加算カード選択
-			for (int i = 0; i < (int)hand.size(); ++i) {
-				if (i == bestIndex) continue;
+			if (useHeal) {
+				// 【回復カードの場合】
+				data.attackTotalPower = totalPower;   // 回復量としてセット
+				data.targetIdx = data.currentTurnIdx; // ターゲットは自分自身に固定
+				data.playerTarget = true;
 
-				CardCategory cat = hand[i].GetCategory();
-				// 加算可能なカテゴリ（Attack, Magic のみ）に限定する
-				// 攻防(Bilingual)、全体(All)、回復(Healing, MagicHealing)、防御(Defense)は加算させない
-				bool isAddableCategory = (cat == Attack || cat == Magic);
-
-				if (isAddableCategory && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
-					data.selectedCards.push_back(i);
-					currentMp -= hand[i].GetMP();
-					totalPower += hand[i].GetPower();
-
-					// 重ね掛けで攻撃の属性を変える仕様の場合、ここで属性を上書きします
-					data.currentAttackElement = hand[i].GetType();
-				}
-			}
-
-			data.attackTotalPower = totalPower;
-
-			// 生きている敵（自分以外）からランダムにターゲットを選ぶ
-			std::vector<int> aliveEnemies;
-			for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-				// Status.dead を参照して気絶判定
-				if (i != data.currentTurnIdx && !data.Player_Turn[i].Status.dead) {
-					aliveEnemies.push_back(i);
-				}
-			}
-
-			if (!aliveEnemies.empty()) {
-				// 乱数のタネ（ハードウェアのノイズなどから生成）
-				std::random_device rd;
-
-				// メルセンヌ・ツイスタ（超高品質な乱数生成エンジン）
-				std::mt19937 gen(rd());
-
-				// 範囲の指定（0 ～ 生きている敵の数-1 の間で「完全に均等な」確率を作る）
-				std::uniform_int_distribution<int> dist(0, aliveEnemies.size() - 1);
-
-				// 実際に乱数を発生させてターゲットを決める
-				data.targetIdx = aliveEnemies[dist(gen)];
+				// 回復は防御フェーズが不要なので、即座に演出フェーズへ移行
+				data.currentPhase = BattlePhase::DefenseReveal;
+				data.revealIndex = 0;
+				data.animDefenseCardCount = 0;
+				data.animationTimer = 0;
 			}
 			else {
-				data.targetIdx = data.currentTurnIdx; // フェールセーフ
-			}
-			data.playerTarget = true;
+				// 【攻撃カードの場合】
+				CardCategory baseCat = hand[bestIndex].GetCategory();
 
-			// 攻撃先が決まったら防御選択フェーズへ
-			data.currentPhase = BattlePhase::DefenseSelect;
+				// ベースが全体攻撃（All）ではない場合のみ加算を許可する
+				if (baseCat != All) {
+					for (int i = 0; i < (int)hand.size(); ++i) {
+						if (i == bestIndex) continue;
+
+						CardCategory cat = hand[i].GetCategory();
+						bool isAddableCategory = (cat == Attack || cat == Magic);
+
+						if (isAddableCategory && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
+							data.selectedCards.push_back(i);
+							currentMp -= hand[i].GetMP();
+							totalPower += hand[i].GetPower();
+							data.currentAttackElement = hand[i].GetType();
+						}
+					}
+				}
+
+				data.attackTotalPower = totalPower;
+
+				// 生きている敵（自分以外）からランダムにターゲットを選ぶ
+				std::vector<int> aliveEnemies;
+				for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+					if (i != data.currentTurnIdx && !data.Player_Turn[i].Status.dead) {
+						aliveEnemies.push_back(i);
+					}
+				}
+
+				if (!aliveEnemies.empty()) {
+					std::random_device rd;
+					std::mt19937 gen(rd());
+					std::uniform_int_distribution<int> dist(0, aliveEnemies.size() - 1);
+					data.targetIdx = aliveEnemies[dist(gen)];
+				}
+				else {
+					data.targetIdx = data.currentTurnIdx; // フェールセーフ
+				}
+				data.playerTarget = true;
+
+				// 攻撃先が決まったら防御選択フェーズへ
+				data.currentPhase = BattlePhase::DefenseSelect;
+			}
 		}
 		else {
-			// 攻撃できない場合はターン終了処理へ
+			// 何もできない場合はターン終了処理へ
 			data.currentTurnIdx = (data.currentTurnIdx + 1) % data.Player_Turn.size();
 		}
 	}
