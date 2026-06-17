@@ -10,6 +10,10 @@ public:
 
     // 攻撃属性の再計算（カード選択時に UI/Input から呼ばれる想定）
     void RecalculateAttackElement(BattleData& data, const std::vector<Card>& hand);
+
+    // 防御属性の更新処理
+    void RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand);
+
 private:
     // --- 内部で処理するための補助関数 ---
     // ターンを次に進める
@@ -27,9 +31,6 @@ private:
     // 合計防御威力の計算
     TotalDefense CalculateTotalDefense(BattleData& data, Player& defender);
 
-    // 防御属性の更新処理
-    void RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand);
-
     // アニメーション処理
     void UpdateCardAnimation(BattleData& data);
 
@@ -38,4 +39,10 @@ private:
 
     // UI側で防御カードを選択できるか判定する関数
     bool CanSelectDefenseCard(const BattleData& data, const Player& defender, int cardIdx, const std::string& incomingAttackElement);
+
+    // 回復系カード用の判定枠ヘルパー関数
+    bool IsHealingAction(const BattleData& data, const Player& attacker);
+
+    // 自分自身が選択された時の判定関数
+    bool IsSelfTarget(const BattleData& data);
 };

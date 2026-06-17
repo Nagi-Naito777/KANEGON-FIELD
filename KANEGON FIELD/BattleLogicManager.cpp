@@ -32,9 +32,39 @@ void BattleLogicManager::Update(BattleData& data) {
                 data.animationTimer = 30; // 次のカードを開くまでの時間
             }
             else {
-                // すべて公開し終わったらエフェクトフェーズへ
-                data.currentPhase = BattlePhase::Effect;
-                data.animationTimer = 60;   // ターゲット表示時間
+                // すべて公開し終わった後の分岐処理
+                Player& attacker = data.Player_Turn[data.currentTurnIdx];
+
+                // 回復カードが含まれているかチェック
+                bool isHealingAction = false;
+                for (int idx : data.selectedCards) {
+                    CardCategory cat = attacker.Hand.GetCards()[idx].GetCategory();
+                    if (cat == CardCategory::Healing || cat == CardCategory::MagicHealing) {
+                        isHealingAction = true;
+                        break;
+                    }
+                }
+
+                if (isHealingAction) {
+                    // 自分自身をクリックしたか、または未選択(-1)の場合は自己回復
+                    bool isSelfTarget = (data.targetIdx == data.currentTurnIdx || data.targetIdx == -1);
+
+                    if (isSelfTarget) {
+                        // 自己回復：防御側のボタン（DefenseSelect）を完全にスキップして即発動！
+                        data.currentPhase = BattlePhase::Effect;
+                        data.animationTimer = 0;
+                    }
+                    else {
+                        // 他人への回復：決定ボタンを押してもらうためDefenseSelectへ移行
+                        data.currentPhase = BattlePhase::DefenseSelect;
+                        data.animationTimer = 0;
+                    }
+                }
+                else {
+                    // 通常攻撃：従来通りターゲット表示フェーズへ
+                    data.currentPhase = BattlePhase::TargetDisplay;
+                    data.animationTimer = 60;
+                }
             }
         }
         break;
@@ -73,8 +103,29 @@ void BattleLogicManager::Update(BattleData& data) {
     case BattlePhase::Effect: {
         // ダメージ計算の実行
         Player& attacker = data.Player_Turn[data.currentTurnIdx];
-        Player* target = nullptr; // ポインタで保持する
 
+        // 誰を回復するか（healTarget）を先に決める
+        // ターゲットが指定されていればその人、未指定(-1)なら自分自身
+        Player* healTarget = &attacker;
+        if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
+            healTarget = &data.Player_Turn[data.targetIdx];
+        }
+
+        // 選択されたカードの中に回復カードがあれば発動する
+        for (int idx : data.selectedCards) {
+            const Card& card = attacker.Hand.GetCards()[idx];
+            if (card.GetCategory() == Healing) {
+                // HP回復
+                healTarget->setHp(healTarget->getHp() + card.GetPower());
+            }
+            else if (card.GetCategory() == MagicHealing) {
+                // MP回復
+                healTarget->setMp(healTarget->getMp() + card.GetPower());
+            }
+        }
+
+        // --- 攻撃対象（ダメージを受ける人）の設定 ---
+        Player* target = nullptr; // ポインタで保持する
         if (data.targetIdx != -1 && data.targetIdx < (int)data.Player_Turn.size()) {
             target = &data.Player_Turn[data.targetIdx];
         }
@@ -194,6 +245,23 @@ void BattleLogicManager::Update(BattleData& data) {
     }
 }
 
+// 判定用のヘルパー関数（クラスの private や public に追加）
+bool BattleLogicManager::IsHealingAction(const BattleData& data, const Player& attacker) {
+    for (int idx : data.selectedCards) {
+        if (idx < 0 || idx >= (int)attacker.Hand.GetCards().size()) continue;
+        CardCategory cat = attacker.Hand.GetCards()[idx].GetCategory();
+        if (cat == CardCategory::Healing || cat == CardCategory::MagicHealing) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool BattleLogicManager::IsSelfTarget(const BattleData& data) {
+    // ターゲットが自分自身のID、または「未選択(-1)」の場合は自分と判定する
+    return data.targetIdx == data.currentTurnIdx || data.targetIdx == -1;
+}
+
 // 共通の属性加算関数
 std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
     if (selectedIdxs.empty()) return "無";
@@ -211,9 +279,15 @@ std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selec
             // 同じ属性同士の加算(例 : 炎＋炎＝炎)はそのまま
             continue;
         }
-        else if (addType == "光" && result != "闇") {
-            // 追加が光属性で、ベースが闇以外なら元の属性を維持(例 : 炎＋光＝炎)
-            continue;
+        else if (addType == "光") {
+            if (result == "闇") {
+                result = "無"; // 闇＋光＝無
+            }
+            // 炎＋光などは元の属性を維持
+        }
+        else if (result == "無") {
+            // ベースが無属性なら加算側に染まる(例 : 無＋炎＝炎)
+            result = addType;
         }
         else {
             // それ以外の異なる属性が混ざった場合は無属性になる
@@ -302,6 +376,11 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
         if (index < 0 || index >= (int)hand.size()) continue;
 
         const Card& card = hand[index];
+
+        // 回復系カードは攻撃計算から除外する
+        if (card.GetCategory() == Healing || card.GetCategory() == MagicHealing) {
+            continue;
+        }
 
         // 2枚目以降はAttackのみ許可
         if (i > 0 && card.GetCategory() != Attack) {
@@ -406,6 +485,13 @@ void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::
 
 // 防御カードの選択可否を判定（UI入力制限用）
 bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const Player& defender, int cardIdx, const std::string& incomingAttackElement) {
+    // 回復アクション中の場合、防御カード選択をブロックする
+    // 攻撃者(ターンプレイヤー)のカードを確認する必要がある
+    const Player& attacker = data.Player_Turn[data.currentTurnIdx];
+    if (IsHealingAction(data, attacker)) {
+        return false;
+    }
+
     auto& hand = defender.Hand.GetCards();
     if (cardIdx < 0 || cardIdx >= (int)hand.size()) return false;
 

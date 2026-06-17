@@ -203,14 +203,14 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         std::string cardElem = hand[i].GetType(); // カードの属性を取得
 
         if (isAttackTurn) {
-            // 防御カード以外は基本的に選択可能
+            // 防御カード以外（＝攻撃・回復など）は自分のターンに選択可能にする
             if (cat != Defense) {
                 isSelectable = true;
 
-                // 【重要】既にカードが選択されている場合、属性一致チェックを行う
-                if (!data.selectedCards.empty() && !data.currentAttackElement.empty()) {
-                    // 属性カードであり、かつ現在の攻撃属性と一致しない場合は不可
-                    if (cardElem != "無" && cardElem != data.currentAttackElement) {
+                // 既にベースカードが選択されている場合
+                if (!data.selectedCards.empty()) {
+                    // GetAdd()がfalse（加算不可のベース武器など）なら選択不可にする
+                    if (!hand[i].GetAdd()) {
                         isSelectable = false;
                     }
                 }
@@ -487,10 +487,12 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
     DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
     DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
 
-    // 属性色の決定と表示
     if (isAttackTurn) {
-        // 攻撃フェーズ 属性に応じた色を取得（ヘルパー関数化推奨）
-        int totalCol = GetElementColor(data.currentAttackElement);
+        // ロジック側で計算済みの最終属性をそのまま取得
+        std::string effectiveElement = data.currentAttackElement;
+        if (effectiveElement == "") effectiveElement = "無";
+
+        int totalCol = GetElementColor(effectiveElement);
         DrawFormatStringToHandle(totalDrawX, totalDrawY, totalCol, Font.GetSmall(), _T("攻 %d"), data.attackTotalPower);
     }
     else {
@@ -678,21 +680,23 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
             }
         }
         // =============================================================
-        // 合計防御力の表示 (ダメージ計算フェーズ等で表示)
+        // 合計防御力の表示
         // =============================================================
-        std::string baseType = hand[data.selectedDefenseCards[0]].GetType();
-        int totalEleCol = GetElementColor(baseType);
+
+        // ロジック側で計算済みの最終属性をそのまま取得
+        std::string effectiveDefElement = data.currentDefenseElement;
+        if (effectiveDefElement == "") effectiveDefElement = "無";
+
+        int totalEleCol = GetElementColor(effectiveDefElement);
 
         int totalDrawX = startX + 100;
         int totalDrawY = 400;
-
         const int totalbox_x = 340;
         const int totalbox_y = 395;
 
         DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
         DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
 
-        // 属性による色変更ロジックは元のまま
         DrawFormatStringToHandle(totalDrawX, totalDrawY, totalEleCol, Font.GetSmall(), _T("守 %d"), data.defenseTotalPower);
     }
 }
