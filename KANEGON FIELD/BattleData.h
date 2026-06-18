@@ -47,9 +47,23 @@ struct BattleData {
 	int attackTotalPower = 0;				// 重ね掛けした合計攻撃威力
 	int defenseTotalPower = 0;				// 重ね掛けした合計防御威力
 	std::string currentAttackElement = "無";// 現在の攻撃属性
-	std::string currentDefenseElement = "無";// 現在の防御属性
+	std::string currentDefenseElement = "無";//現在の防御属性
 	int targetIdx;							// マウスでホバーしたり選択した相手の番号
 	bool playerTarget = false;				// プレイヤーを指定したかどうか
+
+	// --- 特殊効果フラグ（ターン中に効果が持続するもの） ---
+	bool isAllAttack = false;				// 全体攻撃化フラグ
+	float attackMultiplier = 1.0f;			// 攻撃倍率変更変数
+	bool isImmune = false;					// 攻撃無効化フラグ
+	bool isParry = false;					// 攻撃を弾くフラグ
+	bool isCounter = false;					// 攻撃を跳ね返す(カウンター)フラグ
+	bool isDrain = false;					// HP吸収フラグ
+
+	// --- カウンター（攻守逆転・連鎖）用の保持変数 ---
+	int originalTurnIdx = -1;                 // カウンター発生前の本来のターンプレイヤーインデックス
+	bool isPendingAttack = false;             // カウンターなどの「保留中の攻撃」があるか
+	int pendingAttackPower = 0;               // 保留中のカウンター攻撃力
+	std::string pendingAttackType = "無";     // 保留中のカウンター属性
 
 	// --- UI・マウス操作のフラグ ---
 	int selectedOption;						// 現在選ばれている選択肢
@@ -60,6 +74,11 @@ struct BattleData {
 	bool isHoverIdx[MAX];					// 各ボタンの上にマウスがあるか
 	bool isHoverCardIdx[CARD_MAX];			// カード枠の上にマウスがあるか
 	bool isHoverPlayerIdx[MEMBER_MAX];		// どのプレイヤー枠の上にマウスがあるか
+
+	// --- UI表示用の確定リザルトデータ ---
+	int lastDamageDealt = 0;                  // 直前に与えた確定ダメージ量
+	int lastHealingDone = 0;                  // 直前に回復した確定回復量
+	int resultTargetIdx = -1;                 // ダメージや回復の影響を受けたプレイヤーのインデックス
 
 	// アニメーション表示用の枚数
 	int animAttackCardCount = 0;  // 攻撃側が出すカードの表示枚数
@@ -105,10 +124,31 @@ struct BattleData {
 		targetIdx = -1;
 		playerTarget = false;
 
+		// --- 特殊効果フラグ ---
+		isAllAttack = false;
+		attackMultiplier = 1.0f;
+		isImmune = false;
+		isParry = false;
+		isCounter = false;
+		isDrain = false;
+
+		// --- カウンター用のリセット ---
+		originalTurnIdx = -1;
+		isPendingAttack = false;
+		pendingAttackPower = 0;
+		pendingAttackType = "無";
+
 		// --- UI・操作フラグのリセット ---
 		selectedOption = BattleOption::NONE;
 		selectPlayer = -1;
 		hoveredCardIdx = -1;
+
+		// --- UIリザルト用のリセット ---
+		lastDamageDealt = 0;
+		lastHealingDone = 0;
+		resultTargetIdx = -1;
+
+		popups.clear();
 
 		// ※ Player_Turn は Initialize で再代入されるため、
 		// ここで clear しても問題ありません。
