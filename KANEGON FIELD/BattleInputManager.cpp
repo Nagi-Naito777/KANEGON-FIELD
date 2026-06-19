@@ -226,103 +226,63 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                 std::vector<int>& activeSelection = (data.currentPhase == BattlePhase::Select) ? data.selectedCards : data.selectedDefenseCards;
                 auto it = std::find(activeSelection.begin(), activeSelection.end(), i);
 
-                // 選択解除時の処理
+                // --- 選択状態(vector)の更新 ---
                 if (it != activeSelection.end()) {
+                    // 選択解除
                     if (it == activeSelection.begin()) {
-                        // 1枚目（ベース）をクリックしたら全解除し、属性を初期化
-                        activeSelection.clear();
-                        if (data.currentPhase == BattlePhase::Select) {
-                            data.currentAttackElement = "無";
-                        }
-                        else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                            data.currentDefenseElement = "無"; // 防御側の属性UI用
-                        }
+                        activeSelection.clear(); // ベース解除で全解除
                     }
                     else {
-                        // 2枚目以降ならそのカードだけ解除して属性再計算
-                        activeSelection.erase(it);
-                        BattleLogicManager logic;
-                        if (data.currentPhase == BattlePhase::Select) {
-                            logic.RecalculateAttackElement(data, humanHandVec);
-                        }
-                        else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                            logic.RecalculateDefenseElement(data, humanHandVec);
-                        }
+                        activeSelection.erase(it); // 単体解除
                     }
                 }
-
-                // 新規選択・コンボ追加時の処理
                 else {
+                    // 新規選択・コンボ追加
                     if (activeSelection.empty()) {
-                        // 1枚目として選択
                         activeSelection.push_back(i);
-                        std::string baseType = humanHandVec[i].GetType();
-
-                        if (data.currentPhase == BattlePhase::Select) {
-                            data.currentAttackElement = (baseType == "") ? "無" : baseType;
-                        }
-                        else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                            data.currentDefenseElement = (baseType == "") ? "無" : baseType;
-                        }
                     }
                     else {
-                        // 既にベースがある場合のコンボ判定
                         int baseIdx = activeSelection[0];
                         CardCategory baseCat = humanHandVec[baseIdx].GetCategory();
                         bool isBaseHeal = (baseCat == Healing || baseCat == MagicHealing);
                         bool isClickedBilingual = (clickedCat == Bilingual);
 
-                        // 追加不可フラグ、回復カード、攻撃フェーズでの攻防カードならベースを上書き
+                        // 上書き判定
                         if (!isClickedAddable || isClickedHeal || (data.currentPhase == BattlePhase::Select && isClickedBilingual)) {
                             activeSelection.clear();
                             activeSelection.push_back(i);
-                            std::string baseType = humanHandVec[i].GetType();
-
-                            if (data.currentPhase == BattlePhase::Select) {
-                                data.currentAttackElement = (baseType == "") ? "無" : baseType;
-                            }
-                            else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                                data.currentDefenseElement = (baseType == "") ? "無" : baseType;
-                            }
                         }
-                        else {
-                            // 全体攻撃や回復がベースの場合は追加を許可しない
-                            if (baseCat == All || isBaseHeal) {
-                                // 何もしない
-                            }
-                            else {
-                                // 条件クリア：武器などの追加を許可し、属性を再計算
-                                activeSelection.push_back(i);
-                                BattleLogicManager logic;
-                                if (data.currentPhase == BattlePhase::Select) {
-                                    logic.RecalculateAttackElement(data, humanHandVec);
-                                }
-                                else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                                    logic.RecalculateDefenseElement(data, humanHandVec);
-                                }
-                            }
+                        // 追加許可判定
+                        else if (baseCat != All && !isBaseHeal) {
+                            activeSelection.push_back(i);
                         }
                     }
                 }
 
-                // 威力の再計算（ポインタを使ってフェーズごとに変数を切り替える）
-                int* pTargetPower = nullptr;
+                // --- 属性と威力の再計算 (すべてここで行う) ---
+                BattleLogicManager logic;
 
-                // フェーズに応じて操作対象の変数を決める
                 if (data.currentPhase == BattlePhase::Select) {
-                    pTargetPower = &data.attackTotalPower;
-                }
-                else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                    pTargetPower = &data.defenseTotalPower;
-                }
+                    // 属性再計算
+                    logic.RecalculateAttackElement(data, humanHandVec);
 
-                // ポインタが有効なら計算を実行
-                if (pTargetPower != nullptr) {
-                    *pTargetPower = 0; // 0にリセット
-
+                    // 威力再計算
+                    data.attackTotalPower = 0;
                     for (int idx : activeSelection) {
                         if (idx >= 0 && idx < (int)humanHandVec.size()) {
-                            *pTargetPower += humanHandVec[idx].GetPower();
+                            data.attackTotalPower += humanHandVec[idx].GetPower();
+                        }
+                    }
+                }
+                else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
+                    // 属性再計算
+                    logic.RecalculateDefenseElement(data, humanHandVec);
+
+                    // 威力再計算
+                    data.defenseTotalPower = 0;
+                    for (int idx : activeSelection) {
+                        if (idx >= 0 && idx < (int)humanHandVec.size()) {
+                            data.defenseTotalPower += humanHandVec[idx].GetPower();
                         }
                     }
                 }

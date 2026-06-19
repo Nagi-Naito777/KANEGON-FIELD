@@ -131,6 +131,11 @@ struct BattleData {
 		targetIdx = -1;
 		playerTarget = false;
 
+		// --- 換・買カード用の一時保存用変数 ---
+		changeMP = 0;
+		changeMoney = 0;
+		buyTargetCardIdx = -1;
+
 		// --- 特殊効果フラグ ---
 		isAllAttack = false;
 		attackMultiplier = 1.0f;

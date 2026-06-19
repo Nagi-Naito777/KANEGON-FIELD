@@ -12,11 +12,11 @@ bool DamageResolver::IsValidGuard(const std::string& atkAttr, const std::string&
         return true;
     }
 
-    // 3すくみ (炎 -> 水, 水 -> 草, 草 -> 炎 で守れる)
+    // 3すくみ (炎 -> 水, 水 -> 木, 木 -> 炎 で守れる)
     // ※元のコードが"木"でしたが、ご要望に合わせて"草"にしています。カードのデータも"草"になっているかご確認ください。
     if (atkAttr == "炎" && defAttr == "水") return true;
-    if (atkAttr == "水" && defAttr == "草") return true;
-    if (atkAttr == "木" && defAttr == "木") return true;
+    if (atkAttr == "水" && defAttr == "木") return true;
+    if (atkAttr == "木" && defAttr == "炎") return true;
 
     // 上記以外（相性不一致）は防げない
     return false;

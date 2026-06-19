@@ -248,10 +248,10 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         case Bilingual:
             // ©•ª‚ªUŒ‚ƒ^[ƒ“‚ÅA‚©‚ÂUŒ‚ƒtƒF[ƒY‚Ì‚¾‚¯uUv‚É‚·‚é
             if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
-                _stprintf_s(buf, hand[i].GetAdd() ? _T("+U%d") : _T("U%d"), hand[i].GetPower());
+                _stprintf_s(buf, _T("U%d"), hand[i].GetPower());
             }
             else {
-                _stprintf_s(buf, hand[i].GetAdd() ? _T("ç%d") : _T("ç%d"), hand[i].GetPower());
+                _stprintf_s(buf,  _T("ç%d"), hand[i].GetPower());
             }
             show_box = true;
             break;
