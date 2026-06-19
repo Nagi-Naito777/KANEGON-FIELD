@@ -56,6 +56,15 @@ void BattleUIManager::Draw(const BattleData& data) const {
         DrawTargetPlayerName(data);
     }
 
+    // --- カウンター（跳ね返し）待機中のUI表示 ---
+    if (data.isPendingAttack) {
+        int counterEleCol = GetElementColor(data.pendingAttackType);
+        // ターゲット名表示の下あたりに反射ダメージの予告を描画
+        DrawBox(350, 95, 600, 120, Col.GetWhi(), TRUE);
+        DrawBox(350, 95, 600, 120, Col.GetBla(), FALSE);
+        DrawFormatStringToHandle(355, 100, counterEleCol, Font.GetSmall(), _T("【反射待機】威力: %d"), data.pendingAttackPower);
+    }
+
     // 攻撃カードの描画 (セレクト開始?ダメージ計算完了までずっと表示)
     if (data.currentPhase == BattlePhase::Select ||
         data.currentPhase == BattlePhase::DefenseSelect ||
@@ -197,30 +206,6 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         int x = Start_X + (CARD_W + MARGIN) * col;
         int y = Start_Y + (ROW_SPACING * row);
 
-        // このカードが今のターンで使えるか判定
-        bool isSelectable = false;
-        int cat = hand[i].GetCategory();
-        std::string cardElem = hand[i].GetType(); // カードの属性を取得
-
-        if (isAttackTurn) {
-            // 防御カード以外（＝攻撃・回復など）は自分のターンに選択可能にする
-            if (cat != Defense) {
-                isSelectable = true;
-
-                // 既にベースカードが選択されている場合
-                if (!data.selectedCards.empty()) {
-                    // GetAdd()がfalse（加算不可のベース武器など）なら選択不可にする
-                    if (!hand[i].GetAdd()) {
-                        isSelectable = false;
-                    }
-                }
-            }
-        }
-        else {
-            // 防御ターンは防御カテゴリのみ可能
-            if (cat == Defense || cat == Bilingual) isSelectable = true;
-        }
-
         // カード画像の描画
         int picIdx = hand[i].graphicIndex;
 
@@ -261,10 +246,13 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             show_box = true;
             break;
         case Bilingual:
-            if (data.currentPhase == BattlePhase::Select)
-                _stprintf_s(buf, isAttackTurn ? _T("攻%d") : _T("守%d"), hand[i].GetPower());
-            else
-                _stprintf_s(buf, _T("守%d"), hand[i].GetPower());
+            // 自分が攻撃ターンで、かつ攻撃フェーズの時だけ「攻」にする
+            if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
+                _stprintf_s(buf, hand[i].GetAdd() ? _T("+攻%d") : _T("攻%d"), hand[i].GetPower());
+            }
+            else {
+                _stprintf_s(buf, hand[i].GetAdd() ? _T("守%d") : _T("守%d"), hand[i].GetPower());
+            }
             show_box = true;
             break;
         case Magic:
@@ -293,7 +281,59 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             DrawString(x + (CARD_W - w) / 2, textAreaY + 4, buf, Ele_Col);
         }
 
-        // 選択不可の暗転処理
+        // --- 選択可能かどうかの判定をロジック（BattleData）から取得 ---
+        bool isSelectable = false;
+        if (i < data.isCardSelectable.size()) {
+            isSelectable = data.isCardSelectable[i];
+        }
+
+        // フェーズごとの使用制限（暗転）UI上書き処理
+        CardCategory cat = hand[i].GetCategory();
+        std::string cardName = hand[i].GetName();
+        std::string defElem = hand[i].GetType(); // 手札のカード属性
+
+        if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
+            // 攻撃フェーズ：防御専用カードは使用不可
+            if (cat == Defense) {
+                isSelectable = false;
+            }
+        }
+        else if (data.currentPhase == BattlePhase::DefenseSelect && !isAttackTurn) {
+            // 防御フェーズ：攻撃専用カード等は使用不可
+            if (cat == Attack || cat == All) {
+                isSelectable = false;
+            }
+
+            // 現在飛んできている攻撃の属性を取得
+            std::string atkElem = data.currentAttackElement;
+
+            // 属性相性による防御可否判定
+            if (cat == Defense || cat == Bilingual) {
+                // （炎属性の攻撃に、木属性の防具は燃えてしまうため使えない）
+                if (atkElem == "炎" && defElem == "木") isSelectable = false;
+
+                // ※ここに他の相性（弾けない属性など）を必要に応じて追加します
+            }
+
+            // 奇跡（魔法）の制限
+            if (cat == Magic) {
+                // 防御関係、弾き、跳ね返し以外は暗くする
+                if (cardName != "跳ね返し" && cardName != "弾き" && cardName != "防御力アップ") {
+                    // もし「回復」は防御時も使えるルールなら、ここに回復魔法の除外も足します
+                    isSelectable = false;
+                }
+
+                // 弾けない属性の攻撃が来た場合の処理
+                if (cardName == "弾き") {
+                    // （光や闇属性の攻撃は弾けない設定）
+                    if (atkElem == "光" || atkElem == "闇") {
+                        isSelectable = false;
+                    }
+                }
+            }
+        }
+
+        // 選択不可の暗転処理（そのまま）
         if ((data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::DefenseSelect) && !isSelectable) {
             SetDrawBlendMode(DX_BLENDMODE_ALPHA, 150);
             DrawBox(x, y, x + CARD_W, y + CARD_H, Col.GetBla(), TRUE);
@@ -358,9 +398,12 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 
         // 奇跡の消費MPを表示
         if (card.GetCategory() == Magic) {
-            DrawFormatString(textX, textY + 20, GetColor(50, 50, 255), _T("MP-%d"), card.GetMP());
+            // アンリミテッドのみ消費MPを今のMPにする
+            if (card.GetName() == "アンリミテッド")
+                DrawFormatString(textX, textY + 20, GetColor(50, 50, 255), _T("MP-%d"), player.getMp());
+            else
+                DrawFormatString(textX, textY + 20, GetColor(50, 50, 255), _T("MP-%d"), card.GetMP());
         }
-
     }
 }
 
@@ -569,8 +612,7 @@ void BattleUIManager::DrawTargetPlayerName(const BattleData& data) const {
         int stringWidth = GetDrawStringWidthToHandle(
             data.Player_Turn[data.targetIdx].getName().c_str(),
             (int)_tcslen(data.Player_Turn[data.targetIdx].getName().c_str()),
-            Font.GetSmall()
-        );
+            Font.GetSmall());
         int drawX = x + (boxWidth - stringWidth) / 2;
 
         DrawCircle(x, y, r, Col.GetBla(), FALSE);
@@ -774,7 +816,13 @@ void BattleUIManager::DrawPopups(const BattleData& data) const {
             // timerやoffsetYを使って、上にフワッと昇るアニメーションを表現
             int y = startY + (popup.playerIdx * marginY) - popup.offsetY;
 
-            // ここだけ少しフォントを大きくしたい場合などの処理
+            // アウトライン（縁取り）を描画して視認性を高める
+            DrawFormatString(x - 1, y - 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
+            DrawFormatString(x + 1, y - 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
+            DrawFormatString(x - 1, y + 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
+            DrawFormatString(x + 1, y + 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
+
+            // 本体のテキストを描画
             DrawFormatString(x, y, popup.color, "%s", popup.text.c_str());
         }
     }

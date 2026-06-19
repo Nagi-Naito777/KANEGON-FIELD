@@ -7,14 +7,16 @@
 
 enum class BattlePhase {
 	Select,           // 攻撃側のカード選択
+	ChangeStatusEdit, // 換カードのステータス調整待ち
+	BuyConfirm,       // 買カードの購入確認待ち
 	AttackReveal,     // 攻撃カード公開演出
 	TargetDisplay,    // ターゲット表示・確認
 	DefenseSelect,    // 防御側のカード選択
 	DefenseReveal,    // 防御カード公開演出
 	Effect,           // ダメージ計算処理
 	DamageResult,     // 結果表示・演出
-	End,			  // 戦闘終了リザルト
-	Idle			  // カード破棄・ドロー・次ターン準備
+	End,              // 戦闘終了リザルト
+	Idle              // カード破棄・ドロー・次ターン準備
 };
 
 // 戦闘画面のボタン判定用の列挙体
@@ -50,6 +52,11 @@ struct BattleData {
 	std::string currentDefenseElement = "無";//現在の防御属性
 	int targetIdx;							// マウスでホバーしたり選択した相手の番号
 	bool playerTarget = false;				// プレイヤーを指定したかどうか
+
+	// --- 換・買カード用の一時保存用変数 ---
+	int changeMP = 0;        // 換カードで変動させるMP量
+	int changeMoney = 0;     // 換カードで変動させる金額量
+	int buyTargetCardIdx = -1; // 買カードで購入しようとしているカードのインデックス
 
 	// --- 特殊効果フラグ（ターン中に効果が持続するもの） ---
 	bool isAllAttack = false;				// 全体攻撃化フラグ

@@ -25,6 +25,17 @@ public:
     bool CanUseMiracleCard(const Player& player, const Card& card);
 
 private:
+
+    // フェーズごとの処理を関数として分割
+    void ProcessSelectPhase(BattleData& data);
+    void ProcessDefenseSelectPhase(BattleData& data);
+    void ProcessAttackRevealPhase(BattleData& data);
+    void ProcessTargetDisplayPhase(BattleData& data);
+    void ProcessDefenseRevealPhase(BattleData& data);
+    void ProcessEffectPhase(BattleData& data);
+    void ProcessDamageResultPhase(BattleData& data);
+    void ProcessIdlePhase(BattleData& data);
+
     // --- 内部で処理するための補助関数 ---
     // ターンを次に進める
     void NextTurn(BattleData& data);
