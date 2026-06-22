@@ -3,6 +3,60 @@
 #include "Player.h"
 #include <algorithm> // ソート用
 
+// カードの選択可否を更新するベース関数
+void BattleLogicManager::UpdateCardSelectability(BattleData& data, const Player& player, bool isAttackTurn) {
+    const auto& hand = player.Hand.GetCards();
+    data.isCardSelectable.assign(hand.size(), true); // 一旦すべて選択可能にする
+
+    for (size_t i = 0; i < hand.size(); ++i) {
+        CardCategory cat = hand[i].GetCategory();
+        std::string cardName = hand[i].GetName();
+        std::string defElem = hand[i].GetType();
+
+        if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
+            // 攻撃フェーズ：防御専用カードは使用不可
+            if (cat == CardCategory::Defense) {
+                data.isCardSelectable[i] = false;
+            }
+        }
+        else if (data.currentPhase == BattlePhase::DefenseSelect && !isAttackTurn) {
+            // 防御フェーズ：攻撃専用カード等は使用不可
+            if (cat == CardCategory::Attack || cat == CardCategory::All) {
+                data.isCardSelectable[i] = false;
+            }
+
+            std::string atkElem = data.currentAttackElement;
+
+            // 属性相性による防御可否判定(同属性と相性不利属性防御カードは使用不可)
+            if (cat == CardCategory::Defense || cat == CardCategory::Bilingual) {
+                if (atkElem == "炎" && (defElem == "木"|| defElem == "炎")) {
+                    data.isCardSelectable[i] = false;
+                }
+                if (atkElem == "木" && (defElem == "水" || defElem == "木")) {
+                    data.isCardSelectable[i] = false;
+                }
+                if (atkElem == "水" && (defElem == "炎" || defElem == "水")) {
+                    data.isCardSelectable[i] = false;
+                }
+            }
+
+            // 奇跡（魔法）の制限
+            if (cat == CardCategory::Magic) {
+                if (cardName != "跳ね返し" && cardName != "弾き" && cardName != "防御力アップ") {
+                    data.isCardSelectable[i] = false;
+                }
+
+                // 光や闇属性の攻撃は弾けない
+                if (cardName == "弾き") {
+                    if (atkElem == "光" || atkElem == "闇") {
+                        data.isCardSelectable[i] = false;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void BattleLogicManager::Update(BattleData& data) {
     // 全体の汎用アニメーションフレームを更新
     data.animFrame++;
@@ -49,8 +103,8 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
 
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
-    // UI制限のための選択可能フラグ更新
-    data.isCardSelectable.assign(attacker.Hand.GetCards().size(), true);
+    // --- カテゴリ等の基本制限を適用 ---
+    UpdateCardSelectability(data, attacker, true);
 
     for (size_t i = 0; i < attacker.Hand.GetCards().size(); ++i) {
         const Card& card = attacker.Hand.GetCards()[i];
@@ -77,8 +131,8 @@ void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data) {
 
     Player& defender = data.Player_Turn[data.targetIdx];
 
-    // UI制限のための選択可能フラグ更新
-    data.isCardSelectable.assign(defender.Hand.GetCards().size(), true);
+    // --- 属性相性やカテゴリ等の基本制限を適用 ---
+    UpdateCardSelectability(data, defender, false);
 
     for (size_t i = 0; i < defender.Hand.GetCards().size(); ++i) {
         // 属性や回復処理中の制限
@@ -445,33 +499,35 @@ std::string BattleLogicManager::GetCardEffectDescription(const Card& card) {
 std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
     if (selectedIdxs.empty()) return "無";
 
-    // 1枚目をベースにする
+    // 1枚目で初期化
     std::string result = hand[selectedIdxs[0]].GetType();
     if (result == "") result = "無";
 
-    // 2枚目以降の合成処理
     for (size_t i = 1; i < selectedIdxs.size(); ++i) {
-        std::string addType = hand[selectedIdxs[i]].GetType();
-        if (addType == "") addType = "無";
+        std::string next = hand[selectedIdxs[i]].GetType();
+        if (next == "") next = "無";
 
-        if (result == addType) {
-            // 同じ属性同士の加算(例 : 炎＋炎＝炎)はそのまま
+        // 同属性なら何も起きない（継続）
+        if (result == next) continue;
+
+        // 闇と光の混合は無条件で無属性
+        if ((result == "光" && next == "闇") || (result == "闇" && next == "光")) {
+            return "無";
+        }
+
+        // 光属性が含まれる場合の特殊処理
+        // result が光なら、次の属性に上書きされる（光＋炎＝炎）
+        if (result == "光") {
+            result = next;
             continue;
         }
-        else if (addType == "光") {
-            if (result == "闇") {
-                result = "無"; // 闇＋光＝無
-            }
-            // 炎＋光などは元の属性を維持
+        // next が光なら、現在の属性が維持される（炎＋光＝炎）
+        if (next == "光") {
+            continue;
         }
-        else if (result == "無") {
-            // ベースが無属性なら加算側に染まる(例 : 無＋炎＝炎)
-            result = addType;
-        }
-        else {
-            // それ以外の異なる属性が混ざった場合は無属性になる
-            result = "無";
-        }
+
+        // 上記以外（異なる属性同士の混合）はすべて無
+        return "無";
     }
     return result;
 }
@@ -516,6 +572,15 @@ void BattleLogicManager::NextTurn(BattleData& data) {
     data.revealIndex = 0;
     data.animAttackCardCount = 0;
     data.animDefenseCardCount = 0;
+
+    // 属性や特殊効果フラグ、倍率などを完全に初期化
+    data.currentAttackElement = "無";
+    data.currentDefenseElement = "無";
+    data.attackMultiplier = 1.0f;
+    data.isAllAttack = false;
+    data.isImmune = false;
+    data.isParry = false;
+    data.isDrain = false;
 
     // UI用リザルトのリセット
     data.lastDamageDealt = 0;
@@ -720,8 +785,22 @@ TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player&
 }
 
 void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand) {
-    // 共通関数を使って簡略化
-    data.currentDefenseElement = GetCombinedElement(data.selectedDefenseCards, hand);
+    // 防御カードの選択可否フラグを全リセット
+    std::fill(data.isCardSelectable.begin(), data.isCardSelectable.end(), false);
+
+    // 現在の「相手の攻撃属性」を取得
+    std::string attackElem = data.currentAttackElement;
+
+    // 全カードに対して、この攻撃属性を防げるか判定
+    for (int i = 0; i < (int)hand.size(); ++i) {
+        std::string defenseElem = hand[i].GetType();
+
+        // 【防御ロジックの核】
+        // 無属性防具は全てOK、または属性が一致していればOK
+        if (defenseElem == "無" || defenseElem == attackElem || attackElem == "無") {
+            data.isCardSelectable[i] = true;
+        }
+    }
 }
 
 // 防御カードの選択可否を判定（UI入力制限用）

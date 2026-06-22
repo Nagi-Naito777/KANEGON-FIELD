@@ -214,30 +214,33 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
             isSelectable = (cat == Defense || cat == Bilingual);
         }
 
-        // クリック処理
-        if (isSelectable) {
-            data.isHoverCardIdx[i] = input.IsMouseOver(x, y, CARD_W, CARD_H);
+        // まず、現在選択中かどうかを確認する変数を作る
+        std::vector<int>& activeSelection = (data.currentPhase == BattlePhase::Select) ? data.selectedCards : data.selectedDefenseCards;
+        bool isAlreadySelected = (std::find(activeSelection.begin(), activeSelection.end(), i) != activeSelection.end());
 
-            if (input.IsLeftClicked() && data.isHoverCardIdx[i]) {
-                bool isClickedAddable = humanHandVec[i].GetAdd();
-                CardCategory clickedCat = humanHandVec[i].GetCategory();
-                bool isClickedHeal = (clickedCat == Healing || clickedCat == MagicHealing);
+        // ゲート：クリック判定に入るための最低条件
+        if (input.IsMouseOver(x, y, CARD_W, CARD_H)) {
+            data.isHoverCardIdx[i] = true;
 
-                std::vector<int>& activeSelection = (data.currentPhase == BattlePhase::Select) ? data.selectedCards : data.selectedDefenseCards;
+            if (input.IsLeftClicked()) {
                 auto it = std::find(activeSelection.begin(), activeSelection.end(), i);
 
-                // --- 選択状態(vector)の更新 ---
+                // --- A. 解除処理 (すでに選ばれているなら isSelectable に関係なく許可) ---
                 if (it != activeSelection.end()) {
-                    // 選択解除
                     if (it == activeSelection.begin()) {
-                        activeSelection.clear(); // ベース解除で全解除
+                        activeSelection.clear(); // ベース解除
                     }
                     else {
                         activeSelection.erase(it); // 単体解除
                     }
+                    // 解除時は再計算へ進む
                 }
-                else {
-                    // 新規選択・コンボ追加
+                // --- B. 新規選択処理 (isSelectable が true の時のみ許可) ---
+                else if (isSelectable) {
+                    bool isClickedAddable = humanHandVec[i].GetAdd();
+                    CardCategory clickedCat = humanHandVec[i].GetCategory();
+                    bool isClickedHeal = (clickedCat == Healing || clickedCat == MagicHealing);
+
                     if (activeSelection.empty()) {
                         activeSelection.push_back(i);
                     }
@@ -256,35 +259,28 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                         else if (baseCat != All && !isBaseHeal) {
                             activeSelection.push_back(i);
                         }
-                    }
-                }
-
-                // --- 属性と威力の再計算 (すべてここで行う) ---
-                BattleLogicManager logic;
-
-                if (data.currentPhase == BattlePhase::Select) {
-                    // 属性再計算
-                    logic.RecalculateAttackElement(data, humanHandVec);
-
-                    // 威力再計算
-                    data.attackTotalPower = 0;
-                    for (int idx : activeSelection) {
-                        if (idx >= 0 && idx < (int)humanHandVec.size()) {
-                            data.attackTotalPower += humanHandVec[idx].GetPower();
+                        else {
+                            // 選択ルールに合致しない場合（ここに入ると何も追加されない）
+                            continue;
                         }
                     }
+                }
+                else {
+                    // isSelectable が false で、かつ選択済みでもない場合は何もしない
+                    continue;
+                }
+
+                // --- C. 属性と威力の再計算 (選択状態が変わったときのみ実行) ---
+                BattleLogicManager logic;
+                if (data.currentPhase == BattlePhase::Select) {
+                    logic.RecalculateAttackElement(data, humanHandVec);
+                    data.attackTotalPower = 0;
+                    for (int idx : activeSelection) data.attackTotalPower += humanHandVec[idx].GetPower();
                 }
                 else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                    // 属性再計算
                     logic.RecalculateDefenseElement(data, humanHandVec);
-
-                    // 威力再計算
                     data.defenseTotalPower = 0;
-                    for (int idx : activeSelection) {
-                        if (idx >= 0 && idx < (int)humanHandVec.size()) {
-                            data.defenseTotalPower += humanHandVec[idx].GetPower();
-                        }
-                    }
+                    for (int idx : activeSelection) data.defenseTotalPower += humanHandVec[idx].GetPower();
                 }
             }
         }

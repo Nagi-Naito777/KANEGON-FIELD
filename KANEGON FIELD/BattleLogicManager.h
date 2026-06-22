@@ -24,7 +24,15 @@ public:
     // --- MPが足りているかチェックする関数 (UI制限・表示用) ---
     bool CanUseMiracleCard(const Player& player, const Card& card);
 
+    // 攻撃・防御で共通して使う属性の合成ロジック
+    std::string GetCombinedElement(const std::vector<int>& selectedIdxs,
+        const std::vector<Card>& hand);
+
 private:
+
+    // カードの選択可否を更新するベース関数
+    void UpdateCardSelectability(BattleData& data,
+        const Player& player, bool isAttackTurn);
 
     // フェーズごとの処理を関数として分割
     void ProcessSelectPhase(BattleData& data);
@@ -55,10 +63,6 @@ private:
 
     // アニメーション処理
     void UpdateCardAnimation(BattleData& data);
-
-    // 攻撃・防御で共通して使う属性の合成ロジック
-    std::string GetCombinedElement(const std::vector<int>& selectedIdxs, 
-        const std::vector<Card>& hand);
 
     // UI側で防御カードを選択できるか判定する関数
     bool CanSelectDefenseCard(const BattleData& data, const Player& defender, 

@@ -287,53 +287,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             isSelectable = data.isCardSelectable[i];
         }
 
-        // フェーズごとの使用制限（暗転）UI上書き処理
-        CardCategory cat = hand[i].GetCategory();
-        std::string cardName = hand[i].GetName();
-        std::string defElem = hand[i].GetType(); // 手札のカード属性
-
-        if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
-            // 攻撃フェーズ：防御専用カードは使用不可
-            if (cat == Defense) {
-                isSelectable = false;
-            }
-        }
-        else if (data.currentPhase == BattlePhase::DefenseSelect && !isAttackTurn) {
-            // 防御フェーズ：攻撃専用カード等は使用不可
-            if (cat == Attack || cat == All) {
-                isSelectable = false;
-            }
-
-            // 現在飛んできている攻撃の属性を取得
-            std::string atkElem = data.currentAttackElement;
-
-            // 属性相性による防御可否判定
-            if (cat == Defense || cat == Bilingual) {
-                // （炎属性の攻撃に、木属性の防具は燃えてしまうため使えない）
-                if (atkElem == "炎" && defElem == "木") isSelectable = false;
-
-                // ※ここに他の相性（弾けない属性など）を必要に応じて追加します
-            }
-
-            // 奇跡（魔法）の制限
-            if (cat == Magic) {
-                // 防御関係、弾き、跳ね返し以外は暗くする
-                if (cardName != "跳ね返し" && cardName != "弾き" && cardName != "防御力アップ") {
-                    // もし「回復」は防御時も使えるルールなら、ここに回復魔法の除外も足します
-                    isSelectable = false;
-                }
-
-                // 弾けない属性の攻撃が来た場合の処理
-                if (cardName == "弾き") {
-                    // （光や闇属性の攻撃は弾けない設定）
-                    if (atkElem == "光" || atkElem == "闇") {
-                        isSelectable = false;
-                    }
-                }
-            }
-        }
-
-        // 選択不可の暗転処理（そのまま）
+        // --- UIは判定せず、フラグに従って暗転させるだけ ---
         if ((data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::DefenseSelect) && !isSelectable) {
             SetDrawBlendMode(DX_BLENDMODE_ALPHA, 150);
             DrawBox(x, y, x + CARD_W, y + CARD_H, Col.GetBla(), TRUE);
