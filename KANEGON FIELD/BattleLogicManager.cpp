@@ -421,6 +421,17 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
             data.resultTargetIdx = data.targetIdx;
         }
     }
+    // MP回復カードの処理
+    else if (card.GetCategory() == CardCategory::MagicHealing) {
+        if (target != nullptr) {
+            // MPを回復させる (※必要に応じて最大MPを超えないような上限チェックをここに入れます)
+            target->setMp(target->getMp() + card.GetPower());
+
+            // UI側に回復量を表示するための記録（HP回復と共用にするかはお好みで調整してください）
+            data.lastHealingDone += card.GetPower();
+            data.resultTargetIdx = data.targetIdx;
+        }
+    }
     else if (card.GetCategory() == CardCategory::Magic) {
         // 奇跡カードの個別処理（名前で分岐）
         std::string name = card.GetName();
@@ -445,8 +456,8 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
         }
         // 奇跡カードのみ確率で弾く(防御)
         else if (name == "山") {
-            // 例：30%の確率で弾くフラグを立てる
-            if ((rand() % 100) < 30) {
+            // 50%の確率で弾くフラグを立てる
+            if ((rand() % 100) < 50) {
                 data.isParry = true;
             }
         }

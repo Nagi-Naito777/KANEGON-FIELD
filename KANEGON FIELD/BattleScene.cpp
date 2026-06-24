@@ -78,10 +78,9 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 
 	// ターン順をシャッフル
 	std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
-
 	// カード配布（ここで初期カードが配られるため、画面に描画されるようになります）
 	for (auto& player : data.Player_Turn) {
-		for (int i = 0; i < 9; ++i) {
+		for (int i = 0; i < 18; ++i) {
 			player.Hand.Add(CardDB.GetRandomCard());
 		}
 		player.Hand.Sort();

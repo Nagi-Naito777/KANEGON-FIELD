@@ -310,7 +310,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 
         // 背景ボックスの描画
         DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetBoxYel(), TRUE);      // 背景
-        DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetWhi(), FALSE);           // 枠線
+        DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetBla(), FALSE);           // 枠線
 
         // カード画像の描画変数
         const float img_s = 1.5f;               // 画像拡大率
@@ -328,7 +328,11 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         // カード名テキスト
         int card_txt_x = 710;
         int card_txt_y = 460;
-        DrawFormatString(card_txt_x, card_txt_y, Col.GetBla(), _T("[%s]"), card.GetName().c_str());
+        
+        // カードの属性で色を変更する変数
+        unsigned int namecolor= GetElementColor(card.GetType());
+
+        DrawFormatString(card_txt_x, card_txt_y, namecolor, _T("[%s]"), card.GetName().c_str());
 
         // --- 説明文の描画 (画像の右側に改行して表示) ---
         int textX = imgX + img_w + PADDING;

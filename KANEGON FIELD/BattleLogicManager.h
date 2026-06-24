@@ -28,11 +28,15 @@ public:
     std::string GetCombinedElement(const std::vector<int>& selectedIdxs,
         const std::vector<Card>& hand);
 
-private:
-
     // カードの選択可否を更新するベース関数
     void UpdateCardSelectability(BattleData& data,
         const Player& player, bool isAttackTurn);
+
+    // UI側で防御カードを選択できるか判定する関数
+    bool CanSelectDefenseCard(const BattleData& data, const Player& defender,
+        int cardIdx, const std::string& incomingAttackElement);
+
+private:
 
     // フェーズごとの処理を関数として分割
     void ProcessSelectPhase(BattleData& data);
@@ -63,10 +67,6 @@ private:
 
     // アニメーション処理
     void UpdateCardAnimation(BattleData& data);
-
-    // UI側で防御カードを選択できるか判定する関数
-    bool CanSelectDefenseCard(const BattleData& data, const Player& defender, 
-        int cardIdx, const std::string& incomingAttackElement);
 
     // 回復系カード用の判定枠ヘルパー関数
     bool IsHealingAction(const BattleData& data, const Player& attacker);
