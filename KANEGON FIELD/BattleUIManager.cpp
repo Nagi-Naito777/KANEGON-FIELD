@@ -764,24 +764,78 @@ void BattleUIManager::DrawEndScreen(const BattleData& data) const {
 
 // ダメージ・回復のポップアップ描画
 void BattleUIManager::DrawPopups(const BattleData& data) const {
-    const int startX = 660; // プレイヤーステータスの少し左
+    const int startX_atc = 330;     // 攻撃側のプレイヤー関係のポップアップ原点
+    const int startX_def = 660;     // 防御側のプレイヤー関係のポップアップ原点
     const int startY = 75;
     const int marginY = 40;
 
     for (const auto& popup : data.popups) {
-        if (popup.playerIdx >= 0 && popup.playerIdx < data.Player_Turn.size()) {
-            int x = startX;
-            // timerやoffsetYを使って、上にフワッと昇るアニメーションを表現
-            int y = startY + (popup.playerIdx * marginY) - popup.offsetY;
-
-            // アウトライン（縁取り）を描画して視認性を高める
-            DrawFormatString(x - 1, y - 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
-            DrawFormatString(x + 1, y - 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
-            DrawFormatString(x - 1, y + 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
-            DrawFormatString(x + 1, y + 1, GetColor(0, 0, 0), "%s", popup.text.c_str());
-
-            // 本体のテキストを描画
-            DrawFormatString(x, y, popup.color, "%s", popup.text.c_str());
+        // 対象プレイヤーのインデックスが不正な場合はスキップ
+        if (popup.playerIdx < 0 || popup.playerIdx >= (int)data.Player_Turn.size()) {
+            continue;
         }
+
+        // --- アニメーション計算 ---
+        // timerはロジック側で毎フレーム減算されている想定（0で消滅）
+        float progress = 0.0f;
+        if (popup.maxTimer > 0) {
+            // 0.0 (発生直後) ～ 1.0 (消滅寸前) の割合を出す
+            progress = 1.0f - ((float)popup.timer / popup.maxTimer);
+        }
+
+        // --- 座標の決定（攻撃側・防御側の振り分け） ---
+        int drawX = 0;
+        int drawY = 0;
+
+        // 浮き上がる量
+        int floatOffsetY = (int)(progress * 40.0f);
+
+        if (popup.playerIdx == data.currentTurnIdx) {
+            // 【攻撃側】（現在のターンプレイヤー）
+            drawX = startX_atc;
+
+            // 攻撃側は所定の場所に1人表示されている想定なので、marginYの掛け算は省略
+            // ※もし攻撃側もリストで並んでいる場合は `+ (popup.playerIdx * marginY)` を足してください
+            drawY = startY - popup.offsetY - floatOffsetY;
+        }
+        else {
+            // 【防御側】（ターゲット、または全体攻撃に巻き込まれた他のプレイヤー）
+            drawX = startX_def;
+
+            // 防御側は上からリスト表示されている想定で marginY を掛けて位置をずらす
+            drawY = startY + (popup.playerIdx * marginY) - popup.offsetY - floatOffsetY;
+        }
+
+        // --- フェードアウトの計算 ---
+        // 残り30フレームを切ったら徐々に透明にする
+        int alpha = 255;
+        const int fadeFrames = 30;
+        if (popup.timer < fadeFrames) {
+            alpha = (255 * popup.timer) / fadeFrames;
+        }
+
+        // --- 描画設定 ---
+        SetDrawBlendMode(DX_BLENDMODE_ALPHA, alpha);
+
+        int fontHandle = Font.GetSmall(); // ポップアップ用のフォント
+        int outlineColor = Col.GetBla();
+
+        // テキスト表示（「パリィ！」等）の場合は、文字幅があるので少し左にずらして中央に寄せる
+        if (popup.type == PopupType::Text) {
+            drawX -= 20;
+        }
+
+        // --- テキストの描画（縁取り付き） ---
+        // 上下左右に1pxずらして黒で描画し、視認性を上げる
+        DrawFormatStringToHandle(drawX - 1, drawY - 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
+        DrawFormatStringToHandle(drawX + 1, drawY - 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
+        DrawFormatStringToHandle(drawX - 1, drawY + 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
+        DrawFormatStringToHandle(drawX + 1, drawY + 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
+
+        // 本体テキストの描画
+        DrawFormatStringToHandle(drawX, drawY, popup.color, fontHandle, _T("%s"), popup.text.c_str());
+
+        // ブレンドモードを必ず元に戻す
+        SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
     }
 }

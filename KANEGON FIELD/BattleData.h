@@ -5,6 +5,32 @@
 #include "GameConfig.h"
 #include "Player.h"
 
+// ログのタイプ判別用
+enum class PopupType {
+	Nunmer,		// 通常のダメージ数値や回復数値を出す
+	Text		// 弾きやカウンター系のフォントを出す
+};
+
+// ログの全体の種類
+enum class LogType {
+	Damage,		// ダメージログ
+	Heal,		// HP回復ログ
+	MagicHeal,	// MP回復ログ
+	Money,		// お金関係ログ
+	Hit,		// 全体攻撃に当たったかどうかログ
+	YamiDama,	// 闇属性の追撃ダメージログ
+	Counter,	// 跳ね返しログ
+	Parry,		// 弾きログ
+	NoHit		// 無効化ログ
+};
+
+// バトルログ1行分のデータ
+struct BattleLog {
+	std::string text;
+	LogType type;
+	unsigned int color;
+};
+
 enum class BattlePhase {
 	Select,           // 攻撃側のカード選択
 	ChangeStatusEdit, // 換カードのステータス調整待ち
@@ -95,14 +121,16 @@ struct BattleData {
 	std::vector<bool> isCardSelectable;
 
 	// ダメージや回復数値を表示するポップアップUI用の構造体
-	struct DamagePopup {
-		int playerIdx;       // 対象プレイヤー
-		std::string text;    // 数値テキスト
+	struct EffectPopup {
+		PopupType type;      // 演出の種類
+		int playerIdx;       // 対象プレイヤー（キャラの頭上に出すため）
+		std::string text;    // 表示テキスト（数値も文字列化してここに入れる）
 		unsigned int color;  // 色
-		int offsetY;         // 上に昇るアニメーション用のY座標オフセット
-		int timer;           // 表示時間（0になったら消す）
+		int offsetY;         // Y座標オフセット（アニメーション用）
+		int timer;           // 現在の残り表示時間
+		int maxTimer;        // 初期の表示時間（フェードアウトの透明度計算用）
 	};
-	std::vector<DamagePopup> popups; // 発生中のポップアップリスト
+	std::vector<EffectPopup> popups; // 発生中のポップアップリスト
 
 	// データを初期状態に戻すための関数
 	void Clear() {
@@ -160,6 +188,7 @@ struct BattleData {
 		lastHealingDone = 0;
 		resultTargetIdx = -1;
 
+		// --- ポップアップ消去 ---
 		popups.clear();
 
 		// ※ Player_Turn は Initialize で再代入されるため、

@@ -68,7 +68,7 @@ public:
         DeleteFontToHandle(m_bigHandle);
     }
 
-    // --- ゲッター関数 ---
+    // ゲッター関数
     int GetSmall() const { return m_smallHandle; }
     int GetNormal() const { return m_normalHandle; }
     int GetBig() const { return m_bigHandle; }
@@ -115,7 +115,7 @@ public:
         m_sky = GetColor(0, 255, 255);
     }
 
-    // --- ゲッター ---
+    // ゲッター関数
     int GetRed() const { return m_red; }
     int GetBlu() const { return m_blu; }
     int GetGre() const { return m_gre; }

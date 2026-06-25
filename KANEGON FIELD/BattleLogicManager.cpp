@@ -679,7 +679,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 「山」の条件成立時
     if (data.isParry && hasMagicAttack) {
-        data.popups.push_back({ data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
+        data.popups.push_back({ PopupType::Text, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
 
         // カウンター攻撃として、受けるはずだったダメージと属性を「保留」にする
         data.isPendingAttack = true;
@@ -726,7 +726,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 無属性攻撃を無効化
     if (data.isImmune && attack.type == "無") {
-        data.popups.push_back({ data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
+        data.popups.push_back({ PopupType::Text, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
         return;
     }
 
@@ -747,12 +747,12 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
             target.setHp(0);
             target.Status.dead = true;
         }
-        data.popups.push_back({ data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60 });
+        data.popups.push_back({ PopupType::Nunmer,data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60 });
 
         // スティール（HP吸収処理）
         if (data.isDrain && finalDamage > 0) {
             attacker.setHp(attacker.getHp() + finalDamage);
-            data.popups.push_back({ data.currentTurnIdx, "吸収:+" + std::to_string(finalDamage), 0x00FF00, 0, 60 });
+            data.popups.push_back({ PopupType::Nunmer,data.currentTurnIdx, std::to_string(finalDamage), 0x00FF00, 0, 60 });
         }
     }
 }
