@@ -68,5 +68,11 @@ private:
 
     // ダメージ・回復のポップアップ描画
     void DrawPopups(const BattleData& data) const;
+
+    // 換（ステータス変更）ウィンドウの描画
+    void DrawChangeStatusWindow(const BattleData& data) const;
+
+    // 買（購入確認）ウィンドウの描画
+    void DrawBuyConfirmWindow(const BattleData& data) const;
 };
 

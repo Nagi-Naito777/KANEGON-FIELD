@@ -47,6 +47,8 @@ private:
     void ProcessEffectPhase(BattleData& data);
     void ProcessDamageResultPhase(BattleData& data);
     void ProcessIdlePhase(BattleData& data);
+    void ProcessChangeStatusEditPhase(BattleData& data);
+    void ProcessBuyConfirmPhase(BattleData& data);
 
     // --- “à•”‚Åˆ—‚·‚é‚½‚ß‚Ì•â•ŠÖ” ---
     // ƒ^[ƒ“‚ğŸ‚Éi‚ß‚é

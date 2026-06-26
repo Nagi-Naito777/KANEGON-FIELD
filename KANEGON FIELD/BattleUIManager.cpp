@@ -114,7 +114,15 @@ void BattleUIManager::Draw(const BattleData& data) const {
     // ダメージ・回復のポップアップ描画
     DrawPopups(data);
 
-    // 降参確認ウィンドウ（もしあれば）
+    // 換・買フェーズのウィンドウ描画
+    if (data.currentPhase == BattlePhase::ChangeStatusEdit) {
+        DrawChangeStatusWindow(data);
+    }
+    if (data.currentPhase == BattlePhase::BuyConfirm) {
+        DrawBuyConfirmWindow(data);
+    }
+
+    // 降参確認ウィンドウ
     if (data.isSurrenderConfirm) {
         DrawSurrenderWindow(data);
     }
@@ -838,4 +846,35 @@ void BattleUIManager::DrawPopups(const BattleData& data) const {
         // ブレンドモードを必ず元に戻す
         SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
     }
+}
+
+// 換（ステータス変更）ウィンドウの描画
+void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
+    // 画面中央にウィンドウを描画
+    DrawBox(300, 200, 700, 400, Col.GetBla(), TRUE);
+    DrawBox(305, 205, 695, 395, Col.GetBoxYel(), TRUE);
+
+    // 現在の変更予定値を表示
+    DrawFormatString(350, 270, Col.GetBla(), _T("変更MP: %d"), data.changeMP);
+    DrawFormatString(350, 310, Col.GetBla(), _T("変更金額: %d"), data.changeMoney);
+
+    // ※入力処理側（BattleInputManager等）で、この座標をクリックした際に値を増減させる処理が必要です
+}
+
+// 買（購入確認）ウィンドウの描画
+void BattleUIManager::DrawBuyConfirmWindow(const BattleData& data) const {
+    DrawBox(300, 200, 700, 400, Col.GetBla(), TRUE);
+    DrawBox(305, 205, 695, 395, Col.GetBoxYel(), TRUE);
+
+    // はい / いいえ ボタンの描画（ホバー状態で色を変える想定）
+    unsigned int yesCol = data.isHoverIdx[BattleOption::BUY_YES] ? Col.GetCurYel() : Col.GetWhi();
+    unsigned int noCol = data.isHoverIdx[BattleOption::BUY_NO] ? Col.GetCurYel() : Col.GetWhi();
+
+    DrawBox(350, 320, 450, 360, yesCol, TRUE);
+    DrawBox(350, 320, 450, 360, Col.GetBla(), FALSE);
+    DrawString(385, 330, _T("買う"), Col.GetBla());
+
+    DrawBox(550, 320, 650, 360, noCol, TRUE);
+    DrawBox(550, 320, 650, 360, Col.GetBla(), FALSE);
+    DrawString(575, 330, _T("買わない"), Col.GetBla());
 }

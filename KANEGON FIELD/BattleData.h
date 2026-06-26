@@ -7,7 +7,7 @@
 
 // ログのタイプ判別用
 enum class PopupType {
-	Nunmer,		// 通常のダメージ数値や回復数値を出す
+	Number,		// 通常のダメージ数値や回復数値を出す
 	Text		// 弾きやカウンター系のフォントを出す
 };
 
@@ -52,6 +52,12 @@ enum BattleOption {
 	DEFENSE,		// 防御決定判定枠
 	RETURN,
 	GIVE_UP,		// あきらめるボタンの判定枠
+	BUY_YES,		// 買カードの「買う」ボタン
+	BUY_NO,			// 買カードの「買わない」ボタン
+	MP_ADD,			// 換カードのMP増加ボタン
+	MP_DOWN,		// 換カードのMP減少ボタン
+	MONEY_ADD,		// 換カードの金額増加ボタン
+	MONEY_DOWN,		// 換カードの金額減少ボタン
 	MAX
 };
 
@@ -78,11 +84,13 @@ struct BattleData {
 	std::string currentDefenseElement = "無";//現在の防御属性
 	int targetIdx;							// マウスでホバーしたり選択した相手の番号
 	bool playerTarget = false;				// プレイヤーを指定したかどうか
+	int extraAttackPower = 0;				// 「アンリミテッド」などの固定追加ダメージ用
 
 	// --- 換・買カード用の一時保存用変数 ---
-	int changeMP = 0;        // 換カードで変動させるMP量
-	int changeMoney = 0;     // 換カードで変動させる金額量
-	int buyTargetCardIdx = -1; // 買カードで購入しようとしているカードのインデックス
+	int changeMP = 0;						// 換カードで変動させるMP量
+	int changeMoney = 0;					// 換カードで変動させる金額量
+	int buyTargetCardIdx = -1;				// 買カードで購入しようとしているカードのインデックス
+	int sellTargetCardIdx = -1;				// 売カードで売りつけるために選んだ手札インデックス（selectedCardsの2枚目）
 
 	// --- 特殊効果フラグ（ターン中に効果が持続するもの） ---
 	bool isAllAttack = false;				// 全体攻撃化フラグ
@@ -93,10 +101,10 @@ struct BattleData {
 	bool isDrain = false;					// HP吸収フラグ
 
 	// --- カウンター（攻守逆転・連鎖）用の保持変数 ---
-	int originalTurnIdx = -1;                 // カウンター発生前の本来のターンプレイヤーインデックス
-	bool isPendingAttack = false;             // カウンターなどの「保留中の攻撃」があるか
-	int pendingAttackPower = 0;               // 保留中のカウンター攻撃力
-	std::string pendingAttackType = "無";     // 保留中のカウンター属性
+	int originalTurnIdx = -1;               // カウンター発生前の本来のターンプレイヤーインデックス
+	bool isPendingAttack = false;           // カウンターなどの「保留中の攻撃」があるか
+	int pendingAttackPower = 0;             // 保留中のカウンター攻撃力
+	std::string pendingAttackType = "無";   // 保留中のカウンター属性
 
 	// --- UI・マウス操作のフラグ ---
 	int selectedOption;						// 現在選ばれている選択肢
@@ -109,9 +117,9 @@ struct BattleData {
 	bool isHoverPlayerIdx[MEMBER_MAX];		// どのプレイヤー枠の上にマウスがあるか
 
 	// --- UI表示用の確定リザルトデータ ---
-	int lastDamageDealt = 0;                  // 直前に与えた確定ダメージ量
-	int lastHealingDone = 0;                  // 直前に回復した確定回復量
-	int resultTargetIdx = -1;                 // ダメージや回復の影響を受けたプレイヤーのインデックス
+	int lastDamageDealt = 0;                // 直前に与えた確定ダメージ量
+	int lastHealingDone = 0;                // 直前に回復した確定回復量
+	int resultTargetIdx = -1;               // ダメージや回復の影響を受けたプレイヤーのインデックス
 
 	// アニメーション表示用の枚数
 	int animAttackCardCount = 0;  // 攻撃側が出すカードの表示枚数
@@ -129,6 +137,10 @@ struct BattleData {
 		int offsetY;         // Y座標オフセット（アニメーション用）
 		int timer;           // 現在の残り表示時間
 		int maxTimer;        // 初期の表示時間（フェードアウトの透明度計算用）
+
+		// 初期化用コンストラクタ (timer を maxTimer にも自動セット)
+		EffectPopup(PopupType t, int pIdx, std::string txt, unsigned int c, int offY, int time)
+			: type(t), playerIdx(pIdx), text(txt), color(c), offsetY(offY), timer(time), maxTimer(time) {}
 	};
 	std::vector<EffectPopup> popups; // 発生中のポップアップリスト
 
