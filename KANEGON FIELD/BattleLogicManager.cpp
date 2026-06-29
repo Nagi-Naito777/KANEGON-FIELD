@@ -6,46 +6,42 @@
 // カードの選択可否を更新するベース関数
 void BattleLogicManager::UpdateCardSelectability(BattleData& data, const Player& player, bool isAttackTurn) {
     const auto& hand = player.Hand.GetCards();
-    data.isCardSelectable.assign(hand.size(), true); // 一旦すべて選択可能にする
+
+    // isCardSelectableの配列サイズを手札の枚数に合わせる
+    if (data.isCardSelectable.size() != hand.size()) {
+        data.isCardSelectable.resize(hand.size(), true);
+    }
 
     for (size_t i = 0; i < hand.size(); ++i) {
-        CardCategory cat = hand[i].GetCategory();
-        std::string cardName = hand[i].GetName();
-        std::string defElem = hand[i].GetType();
+        const auto& card = hand[i];
+        data.isCardSelectable[i] = true; // 基本は選択可能（明るい状態）として初期化
 
-        if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
-            // 攻撃フェーズ：防御専用カードは使用不可
-            if (cat == CardCategory::Defense) {
+        // MP不足チェック（絶対選択不可）
+        if (player.getMp() < card.GetMP()) {
+            data.isCardSelectable[i] = false;
+            continue;
+        }
+
+        // フェーズごとのカテゴリ・特定カードチェック
+        if (data.currentPhase == BattlePhase::Select) {
+            // 【攻撃フェーズ】
+            // 防具カテゴリは不可
+            if (card.GetCategory() == Defense) {
+                data.isCardSelectable[i] = false;
+            }
+            // 防御系の奇跡（山、キャッスル等）も攻撃フェーズでは不可
+            if (card.GetCategory() == Magic && (card.GetName() == "山" || card.GetName() == "キャッスル")) {
                 data.isCardSelectable[i] = false;
             }
         }
-        else if (data.currentPhase == BattlePhase::DefenseSelect && !isAttackTurn) {
-            // 防御フェーズ：攻撃専用カード等は使用不可
-            if (cat == CardCategory::Attack || cat == CardCategory::All) {
+        else if (data.currentPhase == BattlePhase::DefenseSelect) {
+            // 【防御フェーズ】
+            // 防御系の奇跡かどうかを判定
+            bool isDefenseMagic = (card.GetCategory() == Magic && (card.GetName() == "山" || card.GetName() == "キャッスル"));
+
+            // 防具、バイリンガル、防御系の奇跡「以外」は不可
+            if (card.GetCategory() != Defense && card.GetCategory() != Bilingual && !isDefenseMagic) {
                 data.isCardSelectable[i] = false;
-            }
-
-            std::string atkElem = data.currentAttackElement;
-
-            // 属性相性による防御可否判定（ハードコードを避け、DamageResolverに一任）
-            if (cat == CardCategory::Defense || cat == CardCategory::Bilingual) {
-                if (!DamageResolver::IsValidGuard(atkElem, defElem)) {
-                    data.isCardSelectable[i] = false;
-                }
-            }
-
-            // 奇跡（魔法）の制限
-            if (cat == CardCategory::Magic) {
-                if (cardName != "跳ね返し" && cardName != "弾き" && cardName != "防御力アップ") {
-                    data.isCardSelectable[i] = false;
-                }
-
-                // 光や闇属性の攻撃は弾けない
-                if (cardName == "山") {
-                    if (atkElem == "光" || atkElem == "闇") {
-                        data.isCardSelectable[i] = false;
-                    }
-                }
             }
         }
     }
@@ -105,7 +101,43 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
 
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
-    // --- カテゴリ等の基本制限を適用 ---
+    // 選択状態の自動切り替え
+    if (data.selectedCards.size() >= 2) {
+        int lastIdx = data.selectedCards.back(); // 最後にクリックされたカード
+        const std::string& lastCardName = attacker.Hand.GetCards()[lastIdx].GetName();
+
+        bool lastIsSell = (lastCardName == "バイバイ");
+        bool lastIsSingle = (lastCardName == "チョイスチョイス" || lastCardName == "イコールイコール");
+
+        int firstIdx = data.selectedCards.front(); // 最初に選ばれていたカード
+        const std::string& firstCardName = attacker.Hand.GetCards()[firstIdx].GetName();
+
+        bool firstIsSell = (firstCardName == "バイバイ");
+        bool firstIsSingle = (firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール");
+
+        if (lastIsSell || lastIsSingle) {
+            // あとから特殊カード(売・買・換)がクリックされた場合、これまでの選択を捨ててその特殊カードに切り替える
+            data.selectedCards.clear();
+            data.selectedCards.push_back(lastIdx);
+        }
+        else if (firstIsSingle) {
+            // 先に「買」「換」を選択中に別のカードがクリックされた場合、新しいそのカードに切り替える
+            data.selectedCards.clear();
+            data.selectedCards.push_back(lastIdx);
+        }
+        else if (firstIsSell) {
+            // 先に「売」を選択していて、新しいカード（売り物）がクリックされた場合
+            // すでに「売＋売り物」が揃っている状態でさらに3枚目がクリックされたら、売り物を最新のものに切り替える
+            if (data.selectedCards.size() >= 3) {
+                data.selectedCards.clear();
+                data.selectedCards.push_back(firstIdx); // 「売」は維持
+                data.selectedCards.push_back(lastIdx);  // 最後に選んだものを新しい「売り物」にする
+            }
+        }
+    }
+
+    // カテゴリ等の基本制限を適用
+    // ここで一旦、攻撃フェーズの基本ルール（防具不可など）が適用される
     UpdateCardSelectability(data, attacker, true);
 
     // 「売」カードが既に選択されているかチェック
@@ -113,34 +145,47 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
     for (int idx : data.selectedCards) {
         if (attacker.Hand.GetCards()[idx].GetName() == "バイバイ") {
             hasSellCard = true;
+            break;
         }
     }
 
+    // 現在の選択状態に応じた、他カードの選択可否更新
     for (size_t i = 0; i < attacker.Hand.GetCards().size(); ++i) {
         const Card& card = attacker.Hand.GetCards()[i];
 
-        // MP不足の奇跡カード制限
-        if (!CanUseMiracleCard(attacker, card)) {
-            data.isCardSelectable[i] = false;
-            continue;
-        }
-        // 選択済みカード制限
+        // すでに選択されているカード自身は、UIで再度クリックして解除できるよう選択可能にしておく
         auto it = std::find(data.selectedCards.begin(), data.selectedCards.end(), i);
         if (it != data.selectedCards.end()) {
-            data.isCardSelectable[i] = false;
+            data.isCardSelectable[i] = true;
+            continue;
         }
 
-        // 「売」を選んでいる場合は、2枚目（売りつけるカード）を選べるようにする
-        // ただし、既に2枚選ばれている場合はそれ以上選べないようにロック
-        if (hasSellCard && data.selectedCards.size() >= 2) {
-            data.isCardSelectable[i] = false;
+        if (hasSellCard) {
+            // 【「売」モードの場合】
+            if (data.selectedCards.size() >= 2) {
+                // 既に「売＋売り物」の2枚が揃っているなら、他のカードはロックして暗くする
+                data.isCardSelectable[i] = false;
+            }
+            else {
+                // 売り物を選んでいない状態なら、すべてのカードを売り物候補として選択可能にする！
+                // （UpdateCardSelectability で弾かれた防具やMP不足カードもここで true に上書き復活する）
+                data.isCardSelectable[i] = true;
+            }
         }
-        else if (!hasSellCard && data.selectedCards.size() >= 1) {
-            // 通常は1枚選んだら他のカードはロック
-            data.isCardSelectable[i] = false;
+        else {
+            // 【通常攻撃の加算モード または 「買」「換」モードの場合】
+
+            // MP不足の奇跡カード制限
+            if (!CanUseMiracleCard(attacker, card)) {
+                data.isCardSelectable[i] = false;
+                continue;
+            }
+
+            // 「買」「換」が選ばれている最中でも、他のカードをクリックして「切り替え」操作ができるようにするため、
+            // isCardSelectable を false にしてロックすることはしません。
+            // また、通常攻撃カードの加算も同様にロックしません。
         }
     }
-    // ここで入力待ちとなる（UI側の処理に委ねる）
 }
 
 // -------------------------------------------------------------
@@ -160,6 +205,14 @@ void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data) {
             data.isCardSelectable[i] = false;
             continue;
         }
+
+        // MP不足の奇跡カード制限
+        const Card& card = defender.Hand.GetCards()[i];
+        if (!CanUseMiracleCard(defender, card)) {
+            data.isCardSelectable[i] = false;
+            continue;
+        }
+
         // 選択済みカード制限
         auto it = std::find(data.selectedDefenseCards.begin(), data.selectedDefenseCards.end(), i);
         if (it != data.selectedDefenseCards.end()) {
@@ -762,12 +815,20 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
     auto& hand = attacker.Hand.GetCards();
 
     if (data.selectedCards.empty()) {
-        total.type = _T("無");
+        total.type = "無";
         return total;
     }
 
-    if (data.selectedCards.empty()) return total;
     if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
+
+    // 特殊カード（売・買・換）の場合は計算をスキップ
+    const std::string& firstCardName = hand[data.selectedCards[0]].GetName();
+    if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
+        total.type = "無";   // 特殊カードは常に無属性扱い
+        total.power = 0;     // ダメージ計算には使わないので0
+        total.isAll = false; // 全体攻撃カードを売る際のエラーを防ぐ
+        return total;
+    }
 
     // 新しい共通関数で属性を一発取得
     total.type = GetCombinedElement(data.selectedCards, hand);
@@ -901,6 +962,17 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 }
 
 void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::vector<Card>& hand) {
+    if (!data.selectedCards.empty()) {
+        int firstIdx = data.selectedCards[0];
+        if (firstIdx >= 0 && firstIdx < (int)hand.size()) {
+            const std::string& firstName = hand[firstIdx].GetName();
+            if (firstName == "バイバイ" || firstName == "チョイスチョイス" || firstName == "イコールイコール") {
+                data.currentAttackElement = "無";
+                return;
+            }
+        }
+    }
+
     // 共通関数を使って簡略化
     data.currentAttackElement = GetCombinedElement(data.selectedCards, hand);
 }

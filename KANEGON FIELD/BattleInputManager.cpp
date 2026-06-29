@@ -218,14 +218,19 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
         std::vector<int>& activeSelection = (data.currentPhase == BattlePhase::Select) ? data.selectedCards : data.selectedDefenseCards;
         bool isAlreadySelected = (std::find(activeSelection.begin(), activeSelection.end(), i) != activeSelection.end());
 
+        // クリックの可否判定
+        // ・すでに選ばれているなら：解除できるので true
+        // ・選ばれていないなら：Logic側の判定に従う
+        bool canClick = isAlreadySelected || (i < (int)data.isCardSelectable.size() && data.isCardSelectable[i]);
+
         // ゲート：クリック判定に入るための最低条件
-        if (input.IsMouseOver(x, y, CARD_W, CARD_H)) {
+        if (canClick && input.IsMouseOver(x, y, CARD_W, CARD_H)) {
             data.isHoverCardIdx[i] = true;
 
             if (input.IsLeftClicked()) {
                 auto it = std::find(activeSelection.begin(), activeSelection.end(), i);
 
-                // --- A. 解除処理 (すでに選ばれているなら isSelectable に関係なく許可) ---
+                // --- 解除処理 (すでに選ばれているなら isSelectable に関係なく許可) ---
                 if (it != activeSelection.end()) {
                     if (it == activeSelection.begin()) {
                         activeSelection.clear(); // ベース解除
@@ -235,7 +240,7 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                     }
                     // 解除時は再計算へ進む
                 }
-                // --- B. 新規選択処理 (isSelectable が true の時のみ許可) ---
+                // --- 新規選択処理 (isSelectable が true の時のみ許可) ---
                 else if (isSelectable) {
                     bool isClickedAddable = humanHandVec[i].GetAdd();
                     CardCategory clickedCat = humanHandVec[i].GetCategory();
@@ -270,7 +275,7 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                     continue;
                 }
 
-                // --- C. 属性と威力の再計算 (選択状態が変わったときのみ実行) ---
+                // --- 属性と威力の再計算 (選択状態が変わったときのみ実行) ---
                 BattleLogicManager logic;
                 if (data.currentPhase == BattlePhase::Select) {
                     logic.RecalculateAttackElement(data, humanHandVec);

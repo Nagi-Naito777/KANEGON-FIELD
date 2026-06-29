@@ -429,7 +429,7 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
 
             // カード画像の描画
             int picIdx = card.graphicIndex;
-            if (picIdx >= 0 && picIdx < 100) {
+            if (picIdx >= 0 && picIdx < CARD_KIND) {
                 DrawExtendGraph(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Pic.GetCard(picIdx), TRUE);
             }
             DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);
@@ -653,7 +653,7 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
 
             // カード画像の描画
             int picIdx = card.graphicIndex;
-            if (picIdx >= 0 && picIdx < 100) {
+            if (picIdx >= 0 && picIdx < CARD_KIND) {
                 DrawExtendGraph(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Pic.GetCard(picIdx), TRUE);
             }
             DrawBox(drawX, drawY, drawX + CARD_W, drawY + CARD_H, Col.GetBla(), FALSE);

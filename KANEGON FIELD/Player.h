@@ -15,7 +15,6 @@ struct StatusEffects {
     bool dead = false;      // 気絶状態
     bool poison = false;    // 毒状態
     bool mist = false;      // 霧
-    bool rock = false;      // ランダム1枚使用不可
     bool flash = false;     // 防御カード1枚制限
     bool darkness = false;  // 確率攻撃確定ヒット
 };
