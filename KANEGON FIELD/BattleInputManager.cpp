@@ -252,16 +252,19 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, const InputManag
                     else {
                         int baseIdx = activeSelection[0];
                         CardCategory baseCat = humanHandVec[baseIdx].GetCategory();
-                        bool isBaseHeal = (baseCat == Healing || baseCat == MagicHealing);
+                        bool isBaseHeal = (baseCat == Healing || baseCat == MagicHealing);  // 回復系カードかの判定
                         bool isClickedBilingual = (clickedCat == Bilingual);
+                        bool isBaseForbiddenToAdd = (baseCat == Magic || baseCat == All || isBaseHeal); // 加算禁止カードの判定増加(全体攻撃カードと奇跡カード)
 
                         // 上書き判定
-                        if (!isClickedAddable || isClickedHeal || (data.currentPhase == BattlePhase::Select && isClickedBilingual)) {
+                        // 1枚目が「加算禁止」または「特定の条件」の場合は、強制的にクリアして新規選択にする
+                        if (isBaseForbiddenToAdd || !isClickedAddable || isClickedHeal || (data.currentPhase == BattlePhase::Select && isClickedBilingual)) {
                             activeSelection.clear();
                             activeSelection.push_back(i);
                         }
                         // 追加許可判定
-                        else if (baseCat != All && !isBaseHeal) {
+                        // 1枚目が「売カード」または「加算禁止ではないカテゴリ」の場合のみ、追加を許可する
+                        else if (baseCat == Sell || !isBaseForbiddenToAdd) {
                             activeSelection.push_back(i);
                         }
                         else {

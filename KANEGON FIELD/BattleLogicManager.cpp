@@ -579,6 +579,9 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
         int price = sellCard.GetMoney();
         if (sellCard.GetCategory() == CardCategory::Magic) price = 0; // 奇跡は0円
 
+        // 売りつけたお金をアタッカー(自分)がもらう
+        attacker.setMoney(attacker.getMoney() + price);
+
         // お金 -> MP -> HP の順にダメージ
         int remainingDamage = price;
 
@@ -704,6 +707,16 @@ std::string BattleLogicManager::GetCardEffectDescription(const Card& card) {
 std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
     if (selectedIdxs.empty()) return "無";
 
+    // UIの「属性違いによる自動キャンセル」を防ぐための偽装
+    std::string firstCardName = hand[selectedIdxs[0]].GetName();
+    if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
+        if (selectedIdxs.size() >= 2) {
+            // 2枚目のカードが選ばれたら、全体の属性をそのカードの属性だとUIに信じ込ませる
+            return hand[selectedIdxs[1]].GetType();
+        }
+        return "無";
+    }
+
     // 1枚目で初期化
     std::string result = hand[selectedIdxs[0]].GetType();
     if (result == "") result = "無";
@@ -811,22 +824,25 @@ void BattleLogicManager::RemovePlayer(BattleData& data, int targetIdx) {
 
 TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& attacker) {
     TotalAttack total;
-
     auto& hand = attacker.Hand.GetCards();
 
     if (data.selectedCards.empty()) {
         total.type = "無";
         return total;
     }
-
     if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
 
-    // 特殊カード（売・買・換）の場合は計算をスキップ
+    // 特殊カード時に属性を偽装する
     const std::string& firstCardName = hand[data.selectedCards[0]].GetName();
     if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
-        total.type = "無";   // 特殊カードは常に無属性扱い
-        total.power = 0;     // ダメージ計算には使わないので0
-        total.isAll = false; // 全体攻撃カードを売る際のエラーを防ぐ
+        if (data.selectedCards.size() >= 2) {
+            total.type = hand[data.selectedCards[1]].GetType(); // 2枚目に合わせる
+        }
+        else {
+            total.type = "無";
+        }
+        total.power = 0;     // 通常攻撃の二重ダメージを防ぐため0
+        total.isAll = false; // エラー回避
         return total;
     }
 
@@ -967,12 +983,16 @@ void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::v
         if (firstIdx >= 0 && firstIdx < (int)hand.size()) {
             const std::string& firstName = hand[firstIdx].GetName();
             if (firstName == "バイバイ" || firstName == "チョイスチョイス" || firstName == "イコールイコール") {
-                data.currentAttackElement = "無";
+                if (data.selectedCards.size() >= 2) {
+                    data.currentAttackElement = hand[data.selectedCards[1]].GetType();
+                }
+                else {
+                    data.currentAttackElement = "無";
+                }
                 return;
             }
         }
     }
-
     // 共通関数を使って簡略化
     data.currentAttackElement = GetCombinedElement(data.selectedCards, hand);
 }
