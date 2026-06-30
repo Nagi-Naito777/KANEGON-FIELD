@@ -89,7 +89,9 @@ struct BattleData {
 	// --- 換・買カード用の一時保存用変数 ---
 	int changeMP = 0;						// 換カードで変動させるMP量
 	int changeMoney = 0;					// 換カードで変動させる金額量
+	bool isBuyingAction = false;			// 購入モードの切り替えフラグ
 	int buyTargetCardIdx = -1;				// 買カードで購入しようとしているカードのインデックス
+	bool isSellingAction = false;			// 売却モードの切り替えフラグ
 	int sellTargetCardIdx = -1;				// 売カードで売りつけるために選んだ手札インデックス（selectedCardsの2枚目）
 
 	// --- 特殊効果フラグ（ターン中に効果が持続するもの） ---

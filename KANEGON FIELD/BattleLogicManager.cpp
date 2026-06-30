@@ -229,71 +229,73 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data) {
     if (data.animationTimer > 0) {
         data.animationTimer--;
     }
+
+    if (data.revealIndex < data.selectedCards.size()) {
+        data.revealIndex++;
+        // UI用カウントを同期
+        data.animAttackCardCount = data.revealIndex;
+        data.animationTimer = 30; // 次のカードを開くまでの時間
+    }
     else {
-        if (data.revealIndex < data.selectedCards.size()) {
-            data.revealIndex++;
-            // UI用カウントを同期
-            data.animAttackCardCount = data.revealIndex;
-            data.animationTimer = 30; // 次のカードを開くまでの時間
+        Player& attacker = data.Player_Turn[data.currentTurnIdx];
+        // 最初に選んだカードを取得
+        std::string firstCardName = "";
+        if (!data.selectedCards.empty()) {
+            firstCardName = attacker.Hand.GetCards()[data.selectedCards[0]].GetName();
         }
-        else {
-            Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
-            // 最初に選んだカードを取得
-            std::string firstCardName = "";
-            if (!data.selectedCards.empty()) {
-                firstCardName = attacker.Hand.GetCards()[data.selectedCards[0]].GetName();
+        // 換カードの場合、ステータス編集フェーズへ
+        if (firstCardName == "イコールイコール") {
+            data.currentPhase = BattlePhase::ChangeStatusEdit;
+            return;
+        }
+
+        // 買カードの場合、ターゲットのカードを1枚抽出して確認フェーズへ
+        if (firstCardName == "チョイスチョイス") {
+            // ターゲット未指定ならランダムな他プレイヤーを選択
+            if (data.targetIdx == -1 || data.targetIdx == data.currentTurnIdx) {
+                data.targetIdx = (data.currentTurnIdx + 1) % data.Player_Turn.size();
             }
+            Player& target = data.Player_Turn[data.targetIdx];
 
-            // 換カードの場合、ステータス編集フェーズへ
-            if (firstCardName == "イコールイコール") {
-                data.currentPhase = BattlePhase::ChangeStatusEdit;
-                return;
-            }
-
-            // 買カードの場合、ターゲットのカードを1枚抽出して確認フェーズへ
-            if (firstCardName == "チョイスチョイス") {
-                // ターゲット未指定ならランダムな他プレイヤーを選択
-                if (data.targetIdx == -1 || data.targetIdx == data.currentTurnIdx) {
-                    // ※実際は生存している自分以外のプレイヤーをランダムで選ぶ処理を入れてください
-                    data.targetIdx = (data.currentTurnIdx + 1) % data.Player_Turn.size();
-                }
-                Player& target = data.Player_Turn[data.targetIdx];
-
-                // 相手の手札からランダムに1枚選ぶ
-                if (!target.Hand.GetCards().empty()) {
-                    data.buyTargetCardIdx = rand() % target.Hand.GetCards().size();
-                    int price = target.Hand.GetCards()[data.buyTargetCardIdx].GetMoney();
-
-                    // お金が足りていれば購入確認、足りなければ演出（Effect）へ飛ばして不発にする
-                    if (attacker.getMoney() >= price) {
-                        data.currentPhase = BattlePhase::BuyConfirm;
-                        return;
-                    }
-                }
-                // 貧乏（買えない） or 相手の手札がない場合はそのままEffectフェーズへ
-                data.currentPhase = BattlePhase::Effect;
-                return;
-            }
-
-            // 回復カードが含まれているかチェック
-            if (IsHealingAction(data, attacker)) {
-                // ターゲットが自分の時はクリックせずにそのまま演出フェーズに
-                if (IsSelfTarget(data)) {
-                    data.currentPhase = BattlePhase::Effect;
-                    data.animationTimer = 0;
-                }
-                // ターゲットを自分以外にした場合はその人が防御側のボタンを押すようにする
-                else {
-                    data.currentPhase = BattlePhase::DefenseSelect;
-                    data.animationTimer = 0;
-                }
+            // 相手の手札からランダムに1枚選ぶ
+            if (!target.Hand.GetCards().empty()) {
+                // ランダムに購入対象を選択
+                data.buyTargetCardIdx = rand() % target.Hand.GetCards().size();
+                data.isBuyingAction = true; // 購入モードON
+                data.currentPhase = BattlePhase::DefenseSelect; // 承認へ
             }
             else {
-                data.currentPhase = BattlePhase::TargetDisplay;
-                data.animationTimer = 60;
+                data.currentPhase = BattlePhase::Effect; // 買えない場合は即効果へ
+            }
+            return;
+        }
+
+        // 売カード
+        if (firstCardName == "バイバイ") {
+            data.isSellingAction = true; // 売却モードON
+            data.currentPhase = BattlePhase::DefenseSelect; // 承認へ
+            return;
+        }
+
+        // 回復カードが含まれているかチェック
+        if (IsHealingAction(data, attacker)) {
+            // ターゲットが自分の時はクリックせずにそのまま演出フェーズに
+            if (IsSelfTarget(data)) {
+                data.currentPhase = BattlePhase::Effect;
+                data.animationTimer = 0;
+            }
+            // ターゲットを自分以外にした場合はその人が防御側のボタンを押すようにする
+            else {
+                data.currentPhase = BattlePhase::DefenseSelect;
+                data.animationTimer = 0;
             }
         }
+        else {
+            data.currentPhase = BattlePhase::TargetDisplay;
+            data.animationTimer = 60;
+        }
+
     }
 }
 
