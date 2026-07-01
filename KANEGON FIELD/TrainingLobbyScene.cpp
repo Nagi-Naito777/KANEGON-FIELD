@@ -50,7 +50,7 @@ SceneName TrainingLobbyScene::Update(const InputManager& input) {
 
     // クリック実行処理
     if (input.IsLeftClicked()) {
-        if (isHoverIdx[RETURN]) return SceneName::SELECT;
+        if (isHoverIdx[RETURN]) return OnReturnClicked();
         if (isHoverIdx[MEMBER]) MemberCustom = true;
         if (isHoverIdx[BATTLE_START]) {
             BattlePlayer.clear();

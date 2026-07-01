@@ -44,7 +44,7 @@ void NetworkManager::Update() {
         if (newHandle != -1) {
             netHandle = newHandle;
             isConnected = true;
-            StopListenNetWork(); // 1対1の対戦なので、受付を終了する
+            StopListenNetWork();
         }
     }
 
@@ -56,14 +56,17 @@ void NetworkManager::Update() {
             return;
         }
 
-        // 受信データが来ているかチェック
-        int dataLength = GetNetWorkDataLength(netHandle);
-        if (dataLength >= sizeof(GamePacket)) {
+        // whileループでバッファにあるパケットをすべて処理する
+        while (GetNetWorkDataLength(netHandle) >= sizeof(GamePacket)) {
             GamePacket packet;
-            NetWorkRecv(netHandle, &packet, sizeof(GamePacket));
-
-            // 受信したらすぐに処理せず、キューに突っ込む
-            packetQueue.push(packet);
+            // 戻り値でエラーチェックを入れるとより堅牢です
+            if (NetWorkRecv(netHandle, &packet, sizeof(GamePacket)) >= 0) {
+                packetQueue.push(packet);
+            }
+            else {
+                // 受信エラーが発生した場合はループを抜けるか切断処理
+                break;
+            }
         }
     }
 }

@@ -38,6 +38,12 @@ protected:
     // 子クラスごとに固有のUIを描画するための仮想関数
     virtual void DrawSpecificUI() const = 0;
 
+    // 戻るボタンを押したときの処理（デフォルトはただセレクトに戻るだけ）
+    virtual SceneName OnReturnClicked() { return SceneName::SELECT; }
+
+    // バトル開始ボタンを表示・判定するかどうか（デフォルトは非表示）
+    virtual bool ShouldDrawStartButton() const { return false; }
+
 public:
     BaseLobbyScene(SelectScene::Option mode);
     virtual ~BaseLobbyScene() override = default;
@@ -52,6 +58,5 @@ public:
     virtual SceneName Update(const InputManager& input) = 0;
 
     // 各シーンのクラス定義に追加
-    void SetNetworkManager(NetworkManager* net) override {} // 何もしなくてOK
+    void SetNetworkManager(NetworkManager* net) override {}
 };
-

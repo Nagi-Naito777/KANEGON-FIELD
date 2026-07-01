@@ -9,13 +9,20 @@
 enum class CommandType {
     SYNC_PHASE,
     START_BATTLE,
+    SELECT_TEAM,    // チーム選択通知
 };
 
 // ゲーム用のパケット構造体（固定長）
 struct GamePacket {
     CommandType type;
-    int value1; // 汎用的な数値（今回はフェーズの番号を入れる）
+    int teamId;                // 選んだチーム番号を送るため
+    std::string playerName;   // 誰が選んだかを送るため
+    int value1;                // フェーズ番号
 };
+
+// ネットワーク用に固定長構造体に修正
+// std::wstring を TCHAR 配列にすることで、NetSend でそのまま送受信可能になります
+#define MAX_NAME_LEN 32
 
 class NetworkManager {
 private:

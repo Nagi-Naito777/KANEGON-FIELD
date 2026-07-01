@@ -12,6 +12,8 @@ private:
 protected:
     virtual void DrawSpecificUI() const override;
 
+    // 修行モードでは常にスタートボタンを表示する
+    virtual bool ShouldDrawStartButton() const override { return true; }
 public:
     TrainingLobbyScene();
     virtual SceneName Update(const InputManager& input) override;

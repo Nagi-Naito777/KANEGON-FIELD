@@ -35,8 +35,14 @@ void BaseLobbyScene::Draw() const {
 
     // 共通のバトルスタートボタン描画
     // 後述する各子クラスの固有UI描画を呼び出す前に共通部分を処理
-    if (isHoverIdx[BATTLE_START]) { Pic.MouseHoverDraw(str_but_x, str_but_y + 1, Pic.GetStartButton()); }
-    else { DrawGraph(str_but_x, str_but_y, Pic.GetStartButton(), TRUE); }
+    if (ShouldDrawStartButton()) {
+        if (isHoverIdx[BATTLE_START]) {
+            Pic.MouseHoverDraw(str_but_x, str_but_y + 1, Pic.GetStartButton());
+        }
+        else {
+            DrawGraph(str_but_x, str_but_y, Pic.GetStartButton(), TRUE);
+        }
+    }
 
     // 各モード固有のUIをここに挟み込む
     DrawSpecificUI();
