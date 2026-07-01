@@ -22,6 +22,8 @@ protected:
         TEAM_GREEN,     // チームグリーンで参加(乱闘)
         RANKING,        // ランキングUI表示(真剣勝負用)
         RETURN,         // 一個前の画面に戻る
+        BTN_HOST,       // ホストになるボタン
+        BTN_CLIENT,     // クライアントになるボタン
         MAX             // 詳細設定選択最大数
     };
 
@@ -48,5 +50,8 @@ public:
 
     // Updateは子クラスに強制実装させる
     virtual SceneName Update(const InputManager& input) = 0;
+
+    // 各シーンのクラス定義に追加
+    void SetNetworkManager(NetworkManager* net) override {} // 何もしなくてOK
 };
 

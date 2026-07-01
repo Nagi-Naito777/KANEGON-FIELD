@@ -34,12 +34,17 @@
 #include "InputManager.h"
 #include "SceneManager.h"
 #include "CardDatabase.h"
+#include "NetworkManager.h"
 
 // クラスのインスタンス化
 ColorManager Col;
 FontManager Font;
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+
+    SetDoubleStartValidFlag(TRUE);  // 多重起動を許可する（2枚開けるようになる）
+    SetAlwaysRunFlag(TRUE);         // 非アクティブ状態でも処理を止めない（通信の受信に必須）
+
     ChangeWindowMode(TRUE);
     if (DxLib_Init() == -1) return -1;
     SetWindowText(_T("KANEGON FIELD"));         // ウィンドウのテキスト変更
@@ -67,11 +72,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         return -1;
     }
 
+    // 通信マネージャーのインスタンス化
+    NetworkManager netManager;
+
     // マネージャーの生成
     InputManager inputManager;
 
     // 初期シーンを「タイトル」に指定してシーンマネージャーを作成
-    SceneManager sceneManager(SceneName::TITLE);
+    SceneManager sceneManager(SceneName::TITLE, &netManager);
 
     while (
         ClearDrawScreen() == 0 &&		// 画面に描かれたものを消去する

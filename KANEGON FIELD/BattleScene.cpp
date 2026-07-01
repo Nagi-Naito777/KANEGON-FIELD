@@ -9,6 +9,9 @@
 #include "BattleLogicManager.h"
 #include "BattleData.h"
 
+// 通信対戦用のネットワーク関係ヘッダー
+#include "NetworkManager.h"
+
 // コンストラクタの実装
 BattleScene::BattleScene() {
 	// 配列の初期化
@@ -101,45 +104,83 @@ SceneName BattleScene::Update(const InputManager& input) {
 	if (data.Player_Turn.empty()) {
 		return SceneName::BATTLE;
 	}
-	// =============================================================
-	// 操作プレイヤー（人間）の情報を検索・特定する
-	// =============================================================
-	int humanIdx = 0;
 
-	for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-		// 先ほど作った ControllerType::HUMAN で人間プレイヤーを探す
-		if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
-			humanIdx = i;
-			break;
+	// =============================================================
+	// 通信同期処理
+	// =============================================================
+	if (netManager && netManager->IsConnected()) {
+
+		// 【受信処理】相手からの指示を適用
+		GamePacket packet;
+		while (netManager->PopPacket(packet)) {
+			if (packet.type == CommandType::SYNC_PHASE) {
+				data.currentPhase = static_cast<BattlePhase>(packet.value1);
+				data.animFrame = 0;
+				printfDx("同期: フェーズが %d に変わりました\n", packet.value1);
+			}
+			// 今後ここに追加していく:
+			// if (packet.type == CommandType::ACTION_USE_CARD) { ... }
 		}
+
+		// 【送信処理】ホスト側の操作を送信
+		if (netManager->IsHost()) {
+			// 左クリックでフェーズを進めるテスト（実際はUIボタン等にする）
+			if (input.IsLeftClicked()) {
+				BattlePhase next = (data.currentPhase == BattlePhase::Select) ?
+					BattlePhase::DefenseSelect : BattlePhase::Select;
+
+				// 相手に送信
+				GamePacket sendPacket;
+				sendPacket.type = CommandType::SYNC_PHASE;
+				sendPacket.value1 = (int)next;
+				netManager->SendPacket(sendPacket);
+
+				// 自分にも適用
+				data.currentPhase = next;
+				data.animFrame = 0;
+			}
+		}
+
+		// =============================================================
+		// 操作プレイヤー（人間）の情報を検索・特定する
+		// =============================================================
+		int humanIdx = 0;
+
+		for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+			// 先ほど作った ControllerType::HUMAN で人間プレイヤーを探す
+			if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
+				humanIdx = i;
+				break;
+			}
+		}
+
+		// 抽出した情報を変数にまとめる
+		Player& humanPlayer = data.Player_Turn[humanIdx];
+		bool isHumanTurn = (data.currentTurnIdx == humanIdx);
+
+		// =============================================================
+		// マネージャーの更新処理
+		// =============================================================
+
+		// 入力をデータに反映（先ほど作った引数をすべて渡す）
+		bool isSurrender = inputManager.Update(data, input, humanPlayer, humanIdx, isHumanTurn);
+
+		// もし降参（GIVE_UP）が選択されたら、戦闘シーンを終了する
+		if (isSurrender) {
+			return SceneName::SELECT;
+		}
+
+		// AIの思考をデータに反映
+		aiManager.Update(data, humanIdx, isHumanTurn);
+
+		// ルールに従ってデータを更新（ダメージ計算など）
+		logicManager.Update(data);
+
+		// =============================================================
+		// シーンの継続
+		// =============================================================
+		return SceneName::BATTLE; // 通常時はそのまま戦闘シーンを続ける
 	}
-
-	// 抽出した情報を変数にまとめる
-	Player& humanPlayer = data.Player_Turn[humanIdx];
-	bool isHumanTurn = (data.currentTurnIdx == humanIdx);
-
-	// =============================================================
-	// マネージャーの更新処理
-	// =============================================================
-
-	// 入力をデータに反映（先ほど作った引数をすべて渡す）
-	bool isSurrender = inputManager.Update(data, input, humanPlayer, humanIdx, isHumanTurn);
-
-	// もし降参（GIVE_UP）が選択されたら、戦闘シーンを終了する
-	if (isSurrender) {
-		return SceneName::SELECT;
-	}
-
-	// AIの思考をデータに反映
-	aiManager.Update(data, humanIdx, isHumanTurn);
-
-	// ルールに従ってデータを更新（ダメージ計算など）
-	logicManager.Update(data);
-
-	// =============================================================
-	// シーンの継続
-	// =============================================================
-	return SceneName::BATTLE; // 通常時はそのまま戦闘シーンを続ける
 }
 
 void BattleScene::Draw() const {

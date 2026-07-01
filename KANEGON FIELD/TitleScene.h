@@ -31,5 +31,8 @@ public:
 
     // 【安全対策】Drawから呼ばれるため、この関数にも const を付与
     std::string GetName() const;
+
+    // 各シーンのクラス定義に追加
+    void SetNetworkManager(NetworkManager* net) override {} // 何もしなくてOK
 };
 

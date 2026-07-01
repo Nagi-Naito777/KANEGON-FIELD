@@ -14,12 +14,15 @@ private:
     // 現在のシーンの種類
     SceneName m_currentName;
 
+    // ネットワーク関係の保持ポインタ
+    NetworkManager* m_netManager;
+
     // 指定したシーンを新しく生成する関数
     std::unique_ptr<IScene> CreateScene(SceneName name);
 
 public:
     // コンストラクタ
-    SceneManager(SceneName startScene);
+    SceneManager(SceneName startScene, NetworkManager* net);
 
     // 更新処理
     void Update(const InputManager& input);

@@ -1,5 +1,6 @@
 #pragma once
 #include "InputManager.h"
+#include "NetworkManager.h"
 
 enum class SceneName {
 	NONE = -1,	// 未定義
@@ -19,5 +20,7 @@ public:
 
 	// 毎フレームの描画処理
 	virtual void Draw()const = 0;
-};
 
+	// 通信マネージャーを受け取るための純粋仮想関数を追加
+	virtual void SetNetworkManager(NetworkManager* net) = 0;
+};

@@ -13,8 +13,13 @@
 #include "BattleScene.h"
 
 // コンストラクタ
-SceneManager::SceneManager(SceneName startScene) : m_currentName(startScene) {
+SceneManager::SceneManager(SceneName startScene, NetworkManager* net)
+    : m_currentName(startScene), m_netManager(net) { // 受け取ったポインタをセット
+
     m_currentScene = CreateScene(m_currentName);
+
+    // 最初のシーンにもセットする
+    if (m_currentScene) m_currentScene->SetNetworkManager(m_netManager);
 }
 
 // 指定したシーンを新しく生成する関数
@@ -51,8 +56,12 @@ void SceneManager::Update(const InputManager& input) {
     // 要望されたシーンが現在のシーンと異なる場合、シーンを切り替える
     if (nextName != m_currentName && nextName != SceneName::NONE) {
 
-        // 【追加】切り替え時にデータを一時保持するための変数
+        // 切り替え時にデータを一時保持するための変数
         std::vector<Player> carryOverPlayers;
+        if (m_currentName == SceneName::SETTING && nextName == SceneName::BATTLE) {
+            auto* lobbyScene = dynamic_cast<BaseLobbyScene*>(m_currentScene.get());
+            if (lobbyScene) carryOverPlayers = lobbyScene->GetBattlePlayers();
+        }
 
         // 設定画面からバトル画面へ移動するとき、プレイヤー情報を抜き出す
         if (m_currentName == SceneName::SETTING && nextName == SceneName::BATTLE) {
@@ -67,6 +76,11 @@ void SceneManager::Update(const InputManager& input) {
         // 次のシーンの名前を更新して生成
         m_currentName = nextName;
         m_currentScene = CreateScene(m_currentName);
+
+        // ここで新しいシーンにポインタを渡す！
+        if (m_currentScene) {
+            m_currentScene->SetNetworkManager(m_netManager);
+        }
 
         // 新しいシーンがバトル画面なら、初期化関数にデータを渡す
         if (m_currentName == SceneName::BATTLE) {

@@ -20,6 +20,8 @@ public:
 
     SceneName Update(const InputManager& input) override;
     void Draw() const override;
+    // 各シーンのクラス定義に追加
+    void SetNetworkManager(NetworkManager* net) override {} // 何もしなくてOK
 
 private:
     int selectedOption;         // 現在選ばれている選択肢
