@@ -17,6 +17,8 @@ private:
     bool isTeamState[MAX]; // SettingSceneのisTeamを改名（競合防止）
     bool isBattlePlayer[MEMBER_MAX];
 
+    size_t m_prevClientCount = 0; // 前回までのクライアント接続数
+
     void SelectTeam(int teamId);
 
     NetworkManager* netManager = nullptr;

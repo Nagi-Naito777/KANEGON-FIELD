@@ -37,37 +37,73 @@ bool NetworkManager::ConnectAsClient(const std::string& ipAddress, int port) {
 }
 
 void NetworkManager::Update() {
-    // 1. ホストで、まだ誰も接続してきていない場合の処理
-    if (isHost && !isConnected) {
+    // 1. ホストの場合：常に接続待機を続ける
+    if (isHost) {
         // 新しい接続要求が来ているかチェック
         int newHandle = GetNewAcceptNetWork();
         if (newHandle != -1) {
-            netHandle = newHandle;
-            isConnected = true;
-            StopListenNetWork();
+            clientHandles.push_back(newHandle); // 新しい人をリストに追加
+            isConnected = true; // 誰か一人でもいれば connected 扱い
+        }
+
+        // 切断チェック
+        int lostHandle = GetLostNetWork();
+        if (lostHandle != -1) {
+            // リストから削除
+            for (auto it = clientHandles.begin(); it != clientHandles.end(); ) {
+                if (*it == lostHandle) {
+                    CloseNetWork(*it); // ★確実に閉じる
+                    it = clientHandles.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+            // 誰もいなくなったら isConnected を false にするなどの処理を入れてもOK
+            if (clientHandles.empty()) {
+                isConnected = false;
+            }
+        }
+    }
+    // クライアント側の場合、ホストが落ちた（切断された）かチェック
+    else if (isConnected) {
+        if (GetLostNetWork() == netHandle) {
+            Disconnect(); // 切断処理
+            return;       // これ以上処理しない
         }
     }
 
-    // 2. 接続が確立している場合の受信処理
-    if (isConnected) {
-        // 相手が通信を切断したかチェック
-        if (GetLostNetWork() == netHandle) {
-            Disconnect();
-            return;
+    // 2. 受信処理（ホストとクライアントで分ける）
+    if (isHost) {
+        // ホスト：全員分を受信してキューに入れる
+        for (int handle : clientHandles) {
+            while (GetNetWorkDataLength(handle) >= sizeof(GamePacket)) {
+                GamePacket packet;
+                if (NetWorkRecv(handle, &packet, sizeof(GamePacket)) >= 0) {
+                    packetQueue.push(packet);
+                }
+                else { break; }
+            }
         }
+    }
+    else {
+        // クライアント：netHandle のみを受信
+        if (isConnected && netHandle != -1) {
+            while (GetNetWorkDataLength(netHandle) >= sizeof(GamePacket)) {
+                GamePacket packet;
+                if (NetWorkRecv(netHandle, &packet, sizeof(GamePacket)) >= 0) {
+                    packetQueue.push(packet);
+                }
+                else { break; }
+            }
+        }
+    }
+}
 
-        // whileループでバッファにあるパケットをすべて処理する
-        while (GetNetWorkDataLength(netHandle) >= sizeof(GamePacket)) {
-            GamePacket packet;
-            // 戻り値でエラーチェックを入れるとより堅牢です
-            if (NetWorkRecv(netHandle, &packet, sizeof(GamePacket)) >= 0) {
-                packetQueue.push(packet);
-            }
-            else {
-                // 受信エラーが発生した場合はループを抜けるか切断処理
-                break;
-            }
-        }
+// 全員にパケットを送る（ブロードキャスト）
+void NetworkManager::BroadcastPacket(const GamePacket& packet) {
+    for (int handle : clientHandles) {
+        NetWorkSend(handle, &packet, sizeof(GamePacket));
     }
 }
 
@@ -79,13 +115,27 @@ void NetworkManager::SendPacket(const GamePacket& packet) {
     }
 }
 
+void NetworkManager::SendPacketTo(int handle, const GamePacket& packet) {
+    if (handle != -1) {
+        NetWorkSend(handle, &packet, sizeof(GamePacket));
+    }
+}
+
 void NetworkManager::Disconnect() {
+    // クライアント用ハンドルの破棄
     if (netHandle != -1) {
         CloseNetWork(netHandle);
         netHandle = -1;
     }
+
+    // ホスト用：全クライアントの破棄
+    for (int handle : clientHandles) {
+        CloseNetWork(handle);
+    }
+    clientHandles.clear();
+
     if (isHost) {
-        StopListenNetWork(); // 待機中なら待機もキャンセル
+        StopListenNetWork();
     }
     isConnected = false;
     isHost = false;

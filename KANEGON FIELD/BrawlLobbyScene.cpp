@@ -60,12 +60,44 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
         netManager->Update();
         isConnected = netManager->IsConnected();
 
+        // 【ホスト専用】新しいクライアントが参加した瞬間の同期処理
+        if (isConnected && isHost) {
+            size_t currentClientCount = netManager->GetClientCount();
+            if (currentClientCount > m_prevClientCount) {
+                // 新しい人が入ってきた！ 最新のメンバー情報をその人に送る
+                int newClientHandle = netManager->GetLastAddedClient();
+                for (const auto& p : m_lobbyPlayers) {
+                    GamePacket syncP;
+                    syncP.type = CommandType::SYNC_LOBBY;
+                    syncP.teamId = p.teamId;
+                    memset(syncP.playerName, 0, sizeof(syncP.playerName));
+                    strncpy_s(syncP.playerName, sizeof(syncP.playerName), p.name.c_str(), _TRUNCATE);
+
+                    netManager->SendPacketTo(newClientHandle, syncP);
+                }
+            }
+            m_prevClientCount = currentClientCount; // 人数を更新
+        }
+
         // 【受信処理の拡張】
         GamePacket packet;
         while (netManager->PopPacket(packet)) {
             // バトル開始の合図を受信
             if (packet.type == CommandType::START_BATTLE) {
                 return SceneName::BATTLE;
+            }
+            // 【クライアント専用】ロビー情報の同期を受信
+            else if (packet.type == CommandType::SYNC_LOBBY) {
+                bool found = false;
+                for (auto& p : m_lobbyPlayers) {
+                    if (p.name == packet.playerName) {
+                        p.teamId = packet.teamId;
+                        found = true; break;
+                    }
+                }
+                if (!found && m_lobbyPlayers.size() < MEMBER_MAX) {
+                    m_lobbyPlayers.push_back({ packet.playerName, packet.teamId });
+                }
             }
             // 誰かがチームを選択（またはキャンセル）した通知を受信
             else if (packet.type == CommandType::SELECT_TEAM) {
@@ -94,6 +126,10 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                         m_lobbyPlayers.push_back({ packet.playerName, packet.teamId });
                     }
                 }
+                // 【ホスト専用】受信した変更内容を、他のクライアント全員に中継する
+                if (isHost) {
+                    netManager->BroadcastPacket(packet);
+                }
             }
             // 誰かとの接続が切れた通知を受信
             else if (packet.type == CommandType::DISCONNECT) {
@@ -103,6 +139,10 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                     }
                     else {
                         ++it;
+                    }
+                    // 切断情報も他の人に中継する
+                    if (isHost) {
+                        netManager->BroadcastPacket(packet);
                     }
                 }
             }
@@ -159,7 +199,9 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
             if (ShouldDrawStartButton() && isHoverIdx[BATTLE_START]) {
                 if (CanStartBattle()) {
                     GamePacket p; p.type = CommandType::START_BATTLE;
-                    netManager->SendPacket(p);
+
+                    // ホストがバトル開始を決定するので BroadcastPacket を使う
+                    netManager->BroadcastPacket(p);
                     return SceneName::BATTLE;
                 }
                 else {
@@ -215,8 +257,13 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                     // strncpy_s に変更し、引数を4つにする（_TRUNCATE を付けるのがポイント！）
                     strncpy_s(p.playerName, sizeof(p.playerName), g_player.getName().c_str(), _TRUNCATE);
 
-                    // 作成したパケットを相手に送信する
-                    netManager->SendPacket(p);
+                    // ★変更：ホストとクライアントで送信方法を分ける
+                    if (isHost) {
+                        netManager->BroadcastPacket(p); // ホストは他の全員に配る
+                    }
+                    else {
+                        netManager->SendPacket(p);      // クライアントはホストに送る
+                    }
                 }
             }
         }
@@ -326,8 +373,8 @@ void BrawlLobbyScene::DrawSpecificUI() const {
     else {
         // 接続後は「接続中」を表示
         // ここでも背景を少し暗くすると文字が読みやすくなります
-        DrawBox(295, 295, 505, 355, Col.GetBla(), TRUE); // 文字の背景を黒に
-        DrawBox(295, 295, 505, 355, Col.GetWhi(), FALSE); // 白い枠
-        DrawString(320, 315, "接続待機中...", Col.GetYel());
+        DrawBox(50, 600, 260, 660, Col.GetWhi(), TRUE); // 文字の背景を白に
+        DrawBox(50, 600, 260, 660, Col.GetBla(), FALSE); // 黒い枠
+        DrawString(75, 625, "接続待機中...", Col.GetBla());
     }
 }
