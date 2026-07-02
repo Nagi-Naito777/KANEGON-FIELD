@@ -67,19 +67,43 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
             if (packet.type == CommandType::START_BATTLE) {
                 return SceneName::BATTLE;
             }
-            // 誰かがチームを選択した（参加した）通知を受信
+            // 誰かがチームを選択（またはキャンセル）した通知を受信
             else if (packet.type == CommandType::SELECT_TEAM) {
-                // 名前がすでにリストにあるか探す（重複参加を防ぐ＆チーム変更対応）
-                bool found = false;
-                for (auto& p : m_lobbyPlayers) {
-                    if (p.name == packet.playerName) { // ※パケットに名前が含まれている想定
-                        p.teamId = packet.teamId;
-                        found = true; break;
+                if (packet.teamId == -1) {
+                    // teamId が -1 の場合はキャンセル扱い。リストからその人を削除する
+                    for (auto it = m_lobbyPlayers.begin(); it != m_lobbyPlayers.end(); ) {
+                        if (it->name == packet.playerName) {
+                            it = m_lobbyPlayers.erase(it); // 削除
+                        }
+                        else {
+                            ++it;
+                        }
                     }
                 }
-                // 見つからなかったら、上限未満の場合のみ新規追加（参加順になる）
-                if (!found && m_lobbyPlayers.size() < MEMBER_MAX) {
-                    m_lobbyPlayers.push_back({ packet.playerName, packet.teamId });
+                else {
+                    // 名前がすでにリストにあるか探す（重複参加を防ぐ＆チーム変更対応）
+                    bool found = false;
+                    for (auto& p : m_lobbyPlayers) {
+                        if (p.name == packet.playerName) {
+                            p.teamId = packet.teamId;
+                            found = true; break;
+                        }
+                    }
+                    // 見つからなかったら、上限未満の場合のみ新規追加
+                    if (!found && m_lobbyPlayers.size() < MEMBER_MAX) {
+                        m_lobbyPlayers.push_back({ packet.playerName, packet.teamId });
+                    }
+                }
+            }
+            // 誰かとの接続が切れた通知を受信
+            else if (packet.type == CommandType::DISCONNECT) {
+                for (auto it = m_lobbyPlayers.begin(); it != m_lobbyPlayers.end(); ) {
+                    if (it->name == packet.playerName) {
+                        it = m_lobbyPlayers.erase(it); // リストから削除
+                    }
+                    else {
+                        ++it;
+                    }
                 }
             }
         }
@@ -143,29 +167,55 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                 }
             }
 
-            // チーム選択（上限人数に達していない、または既に自分が参加済みの場合のみ）
+            // チーム選択＆キャンセルロジック
             for (int i = PVP; i <= TEAM_GREEN; i++) {
                 if (isHoverIdx[i]) {
-                    // 通信で送る前に「自分の画面のリスト」をすぐに更新する
-                    bool found = false;
-                    for (auto& p : m_lobbyPlayers) {
-                        if (p.name == g_player.getName()) {
-                            p.teamId = i;
-                            found = true; break;
+                    int sendTeamId = i; // 相手に送るチームID
+                    bool isCancel = false;
+
+                    // 1. 自分の画面のリストをチェックし、キャンセルの判定をする
+                    for (auto it = m_lobbyPlayers.begin(); it != m_lobbyPlayers.end(); ) {
+                        if (it->name == g_player.getName()) {
+                            if (it->teamId == i) {
+                                // すでに同じチームを選択していたらキャンセル（リストから削除）
+                                it = m_lobbyPlayers.erase(it);
+                                sendTeamId = -1; // -1をキャンセルの合図にする
+                                isCancel = true;
+                            }
+                            else {
+                                // 別のチームへの変更
+                                it->teamId = i;
+                                ++it;
+                            }
+                        }
+                        else {
+                            ++it;
                         }
                     }
-                    if (!found && m_lobbyPlayers.size() < MEMBER_MAX) {
-                        m_lobbyPlayers.push_back({ g_player.getName(), i });
+
+                    // 2. キャンセルではなく、かつまだリストに自分がいない場合は新規追加
+                    if (!isCancel && sendTeamId != -1) {
+                        bool found = false;
+                        for (const auto& p : m_lobbyPlayers) {
+                            if (p.name == g_player.getName()) { found = true; break; }
+                        }
+                        if (!found && m_lobbyPlayers.size() < MEMBER_MAX) {
+                            m_lobbyPlayers.push_back({ g_player.getName(), sendTeamId });
+                        }
                     }
 
-                    // 通信で全員に知らせる
+                    // 3. 通信で全員に知らせる
                     GamePacket p;
                     p.type = CommandType::SELECT_TEAM;
-                    p.teamId = i;
+                    p.teamId = sendTeamId; // チーム変更時はそのID、キャンセル時は -1 が入る
 
-                    // 【重要】パケットに自分の名前をセットする（※後述の注意点を参照）
-                    strcpy_s(p.playerName, sizeof(p.playerName), g_player.getName().c_str());
+                    // memset でゼロクリア（ここはそのまま）
+                    memset(p.playerName, 0, sizeof(p.playerName));
 
+                    // strncpy_s に変更し、引数を4つにする（_TRUNCATE を付けるのがポイント！）
+                    strncpy_s(p.playerName, sizeof(p.playerName), g_player.getName().c_str(), _TRUNCATE);
+
+                    // 作成したパケットを相手に送信する
                     netManager->SendPacket(p);
                 }
             }
@@ -173,12 +223,12 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
         else {
             if (netManager != nullptr) {
                 if (isHoverIdx[BTN_HOST]) {
-                    isHost = true; // 【追加】自分がホストであることを記憶
+                    isHost = true; // 自分がホストであることを記憶
                     netManager->StartHost(9850);
                     printfDx("ホスト待機を開始しました\n");
                 }
                 if (isHoverIdx[BTN_CLIENT]) {
-                    isHost = false; // 【追加】クライアントであることを記憶
+                    isHost = false; // クライアントであることを記憶
                     netManager->ConnectAsClient("127.0.0.1", 9850);
                     printfDx("接続を試みます...\n");
                 }
@@ -191,14 +241,22 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
 
 void BrawlLobbyScene::DrawSpecificUI() const {
     int startX = 750;
-    bool isSoloSelected = isTeamState[PVP];
-    bool isAnyTeamSelected = isTeamState[TEAM_RED] || isTeamState[TEAM_BLUE] || isTeamState[TEAM_YELLOW] || isTeamState[TEAM_GREEN];
+    // 描画時も「m_lobbyPlayers」の内容から現在のモードを判定する
+    bool isSoloSelected = false;
+    bool isAnyTeamSelected = false;
+    for (const auto& p : m_lobbyPlayers) {
+        if (p.teamId == PVP) isSoloSelected = true;
+        if (p.teamId >= TEAM_RED && p.teamId <= TEAM_GREEN) isAnyTeamSelected = true;
+    }
 
     // チームボタン描画
     for (int i = TEAM_RED; i <= TEAM_GREEN; i++) {
         int num = i - TEAM_RED;
         int btnY = 100 + (num * 104);
-        if (isSoloSelected) { Pic.ButtonRockDraw(startX, btnY, Pic.GetTeamButton(num)); }
+        // 個人戦が選ばれていたらチームボタンはロック
+        if (isSoloSelected) {
+            Pic.ButtonRockDraw(startX, btnY, Pic.GetTeamButton(num));
+        }
         else {
             if (isHoverIdx[i]) { Pic.MouseHoverDraw(startX, btnY + 1, Pic.GetTeamButton(num)); }
             else { DrawGraph(startX, btnY, Pic.GetTeamButton(num), TRUE); }

@@ -1,6 +1,9 @@
 // 通信処理用クラス
 
 #pragma once
+// ネットワーク用に固定長構造体に修正
+#define MAX_NAME_LEN 32
+
 #include "DxLib.h"
 #include <string>
 #include <queue> // キューを使うために追加
@@ -10,19 +13,16 @@ enum class CommandType {
     SYNC_PHASE,
     START_BATTLE,
     SELECT_TEAM,    // チーム選択通知
+    DISCONNECT,     // 切断通知
 };
 
 // ゲーム用のパケット構造体（固定長）
 struct GamePacket {
     CommandType type;
     int teamId;                // 選んだチーム番号を送るため
-    std::string playerName;   // 誰が選んだかを送るため
+    char playerName[MAX_NAME_LEN];   // 誰が選んだかを送るため
     int value1;                // フェーズ番号
 };
-
-// ネットワーク用に固定長構造体に修正
-// std::wstring を TCHAR 配列にすることで、NetSend でそのまま送受信可能になります
-#define MAX_NAME_LEN 32
 
 class NetworkManager {
 private:
