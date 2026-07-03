@@ -7,43 +7,43 @@
 #include <vector>
 
 // 更新処理
-bool BattleInputManager::Update(BattleData& data, const InputManager& input, Player& humanPlayer, int humanIdx, bool isHumanTurn) {
+PlayerAction BattleInputManager::Update(BattleData& data, const InputManager& input, Player& humanPlayer, int humanIdx, bool isHumanTurn) {
+    PlayerAction action; // 今回のフレームでの行動結果
+
     // 毎フレームの初期化
     std::fill(std::begin(data.isHoverIdx), std::end(data.isHoverIdx), false);
     std::fill(std::begin(data.isHoverPlayerIdx), std::end(data.isHoverPlayerIdx), false);
     std::fill(std::begin(data.isHoverCardIdx), std::end(data.isHoverCardIdx), false);
     data.hoveredCardIdx = -1;
 
-    // 降参画面が開いていたかを記憶する
     bool wasSurrenderConfirm = data.isSurrenderConfirm;
 
-    // 降参UIの処理（降参が確定したら即座に true を返して終了）
-    if (ProcessSurrender(data, input)) {
-        return true;
+    // 降参UIの処理
+    ProcessSurrender(data, input, action);
+    if (action.isSurrender) {
+        return action; // 降参確定ならすぐ返す
     }
 
-    // 元々開いていた(閉じた瞬間)または今開いた瞬間なら、他の判定をスキップ
     if (wasSurrenderConfirm || data.isSurrenderConfirm) {
-        return false;
+        return action; // ウィンドウが開いていたら他の入力は無視
     }
 
     // 攻撃/防御の決定ボタン処理
-    ProcessActionButtons(data, input, humanIdx, isHumanTurn);
+    ProcessActionButtons(data, input, humanIdx, isHumanTurn, action);
 
-    // ターゲットの手動選択処理
+    // ターゲットの手動選択処理 (ローカル処理なのでそのまま)
     ProcessTargetSelection(data, input, isHumanTurn);
 
-    // 手札の選択・コンボ処理
+    // 手札の選択・コンボ処理 (ローカル処理なのでそのまま)
     ProcessHandSelection(data, input, humanPlayer, humanIdx, isHumanTurn);
 
-    // 通常通り戦闘継続
-    return false;
+    return action;
 }
 
 // -------------------------------------------------------------
 // 降参UIの処理
 // -------------------------------------------------------------
-bool BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& input) {
+void BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& input, PlayerAction& action) {
     if (data.isSurrenderConfirm) {
         // ギブアップのボタン描画用変数
         int give_butX = 425;
@@ -59,21 +59,15 @@ bool BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& 
         bool clickedOutside = (input.IsLeftClicked() && !input.IsMouseOver(300, 200, 400, 200));
 
         if (clickedReturnAgain || clickedOutside) {
-            data.isSurrenderConfirm = false; // 降参キャンセル
+            data.isSurrenderConfirm = false;
         }
         else if (input.IsLeftClicked() && data.isHoverIdx[BattleOption::GIVE_UP]) {
             // 降参決定時のデータリセット
-            data.selectedCards.clear();
-            data.selectedDefenseCards.clear();
-            data.playerTarget = false;
-            data.targetIdx = -1;
-            data.attackTotalPower = 0;
-            data.defenseTotalPower = 0;
             data.isSurrenderConfirm = false;
-            data.selectedOption = BattleOption::RETURN;
-            return true; // 降参によるバトルループ終了
+            action.isSurrender = true; // ★直接終了せず、アクションとして通知する
+            action.hasAction = true;
         }
-        return false;
+        return;
     }
 
     // 降参確認画面を出すボタンの処理
@@ -81,20 +75,16 @@ bool BattleInputManager::ProcessSurrender(BattleData& data, const InputManager& 
     if (input.IsLeftClicked() && data.isHoverIdx[BattleOption::RETURN]) {
         data.isSurrenderConfirm = true;
     }
-
-    return false;
 }
 
 // -------------------------------------------------------------
 // 攻撃・防御の決定ボタン処理
 // -------------------------------------------------------------
-void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManager& input, int humanIdx, bool isHumanTurn) {
-    const int DECISION_AREA_W = 271;
-    const int DECISION_AREA_H = 325;
-    const int ATK_BTN_X = 5;
-    const int ATK_BTN_Y = 60;
-    const int DEF_BTN_X = 340;
-    const int DEF_BTN_Y = ATK_BTN_Y;
+void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManager& input, 
+    int humanIdx, bool isHumanTurn, PlayerAction& action) {
+    // マジックナンバー回避用変数
+    const int DECISION_AREA_W = 271, DECISION_AREA_H = 325;
+    const int ATK_BTN_X = 5, ATK_BTN_Y = 60, DEF_BTN_X = 340, DEF_BTN_Y = 60;
 
     Player& turnPlayer = data.Player_Turn[data.currentTurnIdx];
     const auto& turnHandVec = turnPlayer.Hand.GetCards();
@@ -112,10 +102,15 @@ void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManag
                 firstCardCat = turnHandVec[data.selectedCards[0]].GetCategory();
             }
 
-            // オートターゲット機能
+            // 回復系カード判定を行い、行動データにセットする
+            if (firstCardCat == Healing || firstCardCat == MagicHealing) {
+                action.isHealAction = true;
+            }
+
+            // オートターゲット処理
             if (!data.playerTarget || data.targetIdx == -1) {
                 if (firstCardCat == Healing || firstCardCat == MagicHealing) {
-                    data.targetIdx = data.currentTurnIdx; // 回復は自分
+                    data.targetIdx = data.currentTurnIdx;
                 }
                 else {
                     std::vector<int> aliveEnemies;
@@ -129,17 +124,9 @@ void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManag
                 data.playerTarget = true;
             }
 
-            // 回復系なら防御選択フェーズをスキップして、即座に演出フェーズへ移行する
-            if (firstCardCat == Healing || firstCardCat == MagicHealing) {
-                data.currentPhase = BattlePhase::DefenseReveal;
-                data.revealIndex = 0;
-                data.animDefenseCardCount = 0;
-                data.animationTimer = 0;
-            }
-            else {
-                // 攻撃など、相手が防ぐ必要があるものは通常の防御フェーズへ
-                data.currentPhase = BattlePhase::DefenseSelect;
-            }
+            // 勝手にフェーズを変えるのをやめ、行動を通知するだけにする(変更)
+            action.isAttackDecision = true;
+            action.hasAction = true;
         }
     }
     // 【防御フェーズ】
@@ -147,11 +134,9 @@ void BattleInputManager::ProcessActionButtons(BattleData& data, const InputManag
         data.isHoverIdx[BattleOption::DEFENSE] = input.IsMouseOver(DEF_BTN_X, DEF_BTN_Y, DECISION_AREA_W, DECISION_AREA_H);
 
         if (input.IsLeftClicked() && data.isHoverIdx[BattleOption::DEFENSE]) {
-            // ここで次の「演出フェーズ」へ移行する
-            data.currentPhase = BattlePhase::DefenseReveal;
-            data.revealIndex = 0;             // インデックスを0にリセット
-            data.animDefenseCardCount = 0;    // カウントもリセット
-            data.animationTimer = 0;          // 即座に開始
+            // 勝手にフェーズを変えるのをやめ、行動を通知するだけにする(こちらも変更)
+            action.isDefenseDecision = true;
+            action.hasAction = true;
         }
     }
 }

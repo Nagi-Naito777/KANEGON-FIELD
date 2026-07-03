@@ -106,11 +106,10 @@ SceneName BattleScene::Update(const InputManager& input) {
 	}
 
 	// =============================================================
-	// 操作プレイヤー（自分自身）の情報を特定する (共通処理)
+	// 自分自身の特定
 	// =============================================================
 	int myPlayerIdx = 0;
 	for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-		// 人間（このPCを操作しているプレイヤー）を探す
 		if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
 			myPlayerIdx = i;
 			break;
@@ -121,71 +120,98 @@ SceneName BattleScene::Update(const InputManager& input) {
 	bool isMyTurn = (data.currentTurnIdx == myPlayerIdx);
 
 	// =============================================================
-	// 通信状態の確認（オンラインかオフラインか）
+	// 入力の取得(フェーズの進行は無し)
 	// =============================================================
+	PlayerAction myAction = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
+
+	if (myAction.isSurrender) {
+		// ※オンライン時は相手に切断や降参パケットを送る処理が必要になります
+		return SceneName::SELECT;
+	}
+
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
 
+	// =============================================================
+	// 通信対戦時の処理
+	// =============================================================
 	if (isOnline) {
-		// -------------------------------------------------------------
-		// 【オンライン対戦の処理】(AI不使用・プレイヤー同士の対戦)
-		// -------------------------------------------------------------
-
-		// ① 【受信処理】相手やホストからのパケットを反映 (全員共通)
+		// 【1. 受信処理】相手やホストからの状態更新を反映
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
 			if (packet.type == CommandType::SYNC_PHASE) {
+				// ホストからフェーズ変更の合図が来たら、初めて自分の画面を進める
 				data.currentPhase = static_cast<BattlePhase>(packet.value1);
 				data.animFrame = 0;
-				printfDx("同期: フェーズが %d に変わりました\n", packet.value1);
 			}
-			// 今後 ACTION_USE_CARD (カード選択) や END_TURN などの受信処理をここに追加
+			// クライアントからの「攻撃ボタン押したよ」を受信したホストの処理
+			else if (packet.type == CommandType::START_BATTLE /* 便宜上、ACTION_ATTACKと読み替えてください */) {
+				if (netManager->IsHost()) {
+					// ここで相手の選んだカード情報などをdataに反映し、フェーズを進める
+					BattlePhase nextPhase = BattlePhase::DefenseSelect; // 状況に応じて分岐
+					data.currentPhase = nextPhase;
+					data.animFrame = 0;
+
+					// 結果を全員に配る
+					GamePacket syncP;
+					syncP.type = CommandType::SYNC_PHASE;
+					syncP.value1 = (int)nextPhase;
+					netManager->BroadcastPacket(syncP);
+				}
+			}
 		}
 
-		// ② 【入力・送信処理】自分の操作を処理
-		// UI操作や自分のターンの入力受付を行う
-		bool isSurrender = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
+		// 【2. アクション送信処理】ボタンを押した結果を通信に乗せる
+		if (myAction.hasAction) {
+			if (myAction.isAttackDecision) {
+				if (netManager->IsHost()) {
+					// 自分がホストなら、即座にフェーズを進めて全員に配る
+					BattlePhase nextPhase = BattlePhase::DefenseSelect;
+					// ※回復なら DefenseReveal になる等の分岐を後で追加します
+					data.currentPhase = nextPhase;
+					data.animFrame = 0;
 
-		if (isSurrender) {
-			// ※ 今後、降参したことを相手に伝えるパケットを送る処理が必要になります
-			return SceneName::SELECT;
+					GamePacket syncP;
+					syncP.type = CommandType::SYNC_PHASE;
+					syncP.value1 = (int)nextPhase;
+					netManager->BroadcastPacket(syncP);
+				}
+				else {
+					// クライアントなら、ホストに「攻撃した」と送って待機する
+					GamePacket p;
+					p.type = CommandType::START_BATTLE; // 便宜上。後で ACTION_ATTACK を作ってください
+					// p.value1 = data.targetIdx; などを後で乗せます
+					netManager->SendPacket(p);
+				}
+			}
+			// isDefenseDecision の場合も同様に処理します
 		}
 
-		// ※ ここで inputManager で決定した行動（カード選択など）があれば、
-		// クライアントなら SendPacket、ホストなら BroadcastPacket する処理を後々追加します。
-
-		// ③ 【ロジック計算】ホストのみがゲーム進行を管理
+		// 【3. ロジック計算】ホストのみがゲーム進行を管理
 		if (netManager->IsHost()) {
-			// ダメージ計算やターンの進行など、ゲームの「正解」は審判であるホストだけが計算する
 			logicManager.Update(data);
-
-			// ※ ホスト側の logicManager でフェーズが変化したり、ダメージが発生した場合、
-			// その結果を BroadcastPacket で全クライアントに送信し、同期させる処理を追加します。
 		}
 	}
+	// =============================================================
+	// AI対戦（オフライン時）の処理
+	// =============================================================
 	else {
-		// -------------------------------------------------------------
-		// 【AI対戦の処理】(オフライン時の従来のロジック)
-		// -------------------------------------------------------------
-
-		// ① プレイヤー（自分）の入力をデータに反映
-		bool isSurrender = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
-
-		if (isSurrender) {
-			return SceneName::SELECT;
+		// オフラインなら、ボタンが押された瞬間に自分でフェーズを進める
+		if (myAction.hasAction) {
+			if (myAction.isAttackDecision) {
+				// 回復系カードなら直接 DefenseReveal、そうでなければ DefenseSelect
+				data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+				data.animFrame = 0;
+			}
+			else if (myAction.isDefenseDecision) {
+				data.currentPhase = BattlePhase::DefenseReveal;
+				data.animFrame = 0;
+			}
 		}
 
-		// ② AIの思考をデータに反映 
-		// ※ オンライン時はこのブロックに入らないため、対人戦でAIが勝手に動くことはありません。
 		aiManager.Update(data, myPlayerIdx, isMyTurn);
-
-		// ③ ルールに従ってデータを更新（ダメージ計算、フェーズ移行など）
-		// オフラインなのでこのPC自身が全て計算する
 		logicManager.Update(data);
 	}
 
-	// =============================================================
-	// シーンの継続
-	// =============================================================
 	return SceneName::BATTLE;
 }
 
