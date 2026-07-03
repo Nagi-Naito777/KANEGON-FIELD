@@ -375,6 +375,6 @@ void BrawlLobbyScene::DrawSpecificUI() const {
         // ‚±‚±‚Å‚à”wŒi‚ğ­‚µˆÃ‚­‚·‚é‚Æ•¶š‚ª“Ç‚İ‚â‚·‚­‚È‚è‚Ü‚·
         DrawBox(50, 600, 260, 660, Col.GetWhi(), TRUE); // •¶š‚Ì”wŒi‚ğ”’‚É
         DrawBox(50, 600, 260, 660, Col.GetBla(), FALSE); // •‚¢˜g
-        DrawString(75, 625, "Ú‘±‘Ò‹@’†...", Col.GetBla());
+        DrawString(75, 620, "Ú‘±‘Ò‹@’†...", Col.GetBla());
     }
 }

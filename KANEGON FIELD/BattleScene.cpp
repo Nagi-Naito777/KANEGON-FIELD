@@ -83,7 +83,7 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 	std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
 	// カード配布（ここで初期カードが配られるため、画面に描画されるようになります）
 	for (auto& player : data.Player_Turn) {
-		for (int i = 0; i < 18; ++i) {
+		for (int i = 0; i < 9; ++i) {
 			player.Hand.Add(CardDB.GetRandomCard());
 		}
 		player.Hand.Sort();
@@ -106,11 +106,31 @@ SceneName BattleScene::Update(const InputManager& input) {
 	}
 
 	// =============================================================
-	// 通信同期処理
+	// 操作プレイヤー（自分自身）の情報を特定する (共通処理)
 	// =============================================================
-	if (netManager && netManager->IsConnected()) {
+	int myPlayerIdx = 0;
+	for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+		// 人間（このPCを操作しているプレイヤー）を探す
+		if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
+			myPlayerIdx = i;
+			break;
+		}
+	}
 
-		// 【受信処理】相手からの指示を適用
+	Player& myPlayer = data.Player_Turn[myPlayerIdx];
+	bool isMyTurn = (data.currentTurnIdx == myPlayerIdx);
+
+	// =============================================================
+	// 通信状態の確認（オンラインかオフラインか）
+	// =============================================================
+	bool isOnline = (netManager != nullptr && netManager->IsConnected());
+
+	if (isOnline) {
+		// -------------------------------------------------------------
+		// 【オンライン対戦の処理】(AI不使用・プレイヤー同士の対戦)
+		// -------------------------------------------------------------
+
+		// ① 【受信処理】相手やホストからのパケットを反映 (全員共通)
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
 			if (packet.type == CommandType::SYNC_PHASE) {
@@ -118,69 +138,55 @@ SceneName BattleScene::Update(const InputManager& input) {
 				data.animFrame = 0;
 				printfDx("同期: フェーズが %d に変わりました\n", packet.value1);
 			}
-			// 今後ここに追加していく:
-			// if (packet.type == CommandType::ACTION_USE_CARD) { ... }
+			// 今後 ACTION_USE_CARD (カード選択) や END_TURN などの受信処理をここに追加
 		}
 
-		// 【送信処理】ホスト側の操作を送信
+		// ② 【入力・送信処理】自分の操作を処理
+		// UI操作や自分のターンの入力受付を行う
+		bool isSurrender = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
+
+		if (isSurrender) {
+			// ※ 今後、降参したことを相手に伝えるパケットを送る処理が必要になります
+			return SceneName::SELECT;
+		}
+
+		// ※ ここで inputManager で決定した行動（カード選択など）があれば、
+		// クライアントなら SendPacket、ホストなら BroadcastPacket する処理を後々追加します。
+
+		// ③ 【ロジック計算】ホストのみがゲーム進行を管理
 		if (netManager->IsHost()) {
-			// 左クリックでフェーズを進めるテスト（実際はUIボタン等にする）
-			if (input.IsLeftClicked()) {
-				BattlePhase next = (data.currentPhase == BattlePhase::Select) ?
-					BattlePhase::DefenseSelect : BattlePhase::Select;
+			// ダメージ計算やターンの進行など、ゲームの「正解」は審判であるホストだけが計算する
+			logicManager.Update(data);
 
-				// 相手に送信
-				GamePacket sendPacket;
-				sendPacket.type = CommandType::SYNC_PHASE;
-				sendPacket.value1 = (int)next;
-				netManager->SendPacket(sendPacket);
-
-				// 自分にも適用
-				data.currentPhase = next;
-				data.animFrame = 0;
-			}
+			// ※ ホスト側の logicManager でフェーズが変化したり、ダメージが発生した場合、
+			// その結果を BroadcastPacket で全クライアントに送信し、同期させる処理を追加します。
 		}
+	}
+	else {
+		// -------------------------------------------------------------
+		// 【AI対戦の処理】(オフライン時の従来のロジック)
+		// -------------------------------------------------------------
 
-		// =============================================================
-		// 操作プレイヤー（人間）の情報を検索・特定する
-		// =============================================================
-		int humanIdx = 0;
+		// ① プレイヤー（自分）の入力をデータに反映
+		bool isSurrender = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
 
-		for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-			// 先ほど作った ControllerType::HUMAN で人間プレイヤーを探す
-			if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
-				humanIdx = i;
-				break;
-			}
-		}
-
-		// 抽出した情報を変数にまとめる
-		Player& humanPlayer = data.Player_Turn[humanIdx];
-		bool isHumanTurn = (data.currentTurnIdx == humanIdx);
-
-		// =============================================================
-		// マネージャーの更新処理
-		// =============================================================
-
-		// 入力をデータに反映（先ほど作った引数をすべて渡す）
-		bool isSurrender = inputManager.Update(data, input, humanPlayer, humanIdx, isHumanTurn);
-
-		// もし降参（GIVE_UP）が選択されたら、戦闘シーンを終了する
 		if (isSurrender) {
 			return SceneName::SELECT;
 		}
 
-		// AIの思考をデータに反映
-		aiManager.Update(data, humanIdx, isHumanTurn);
+		// ② AIの思考をデータに反映 
+		// ※ オンライン時はこのブロックに入らないため、対人戦でAIが勝手に動くことはありません。
+		aiManager.Update(data, myPlayerIdx, isMyTurn);
 
-		// ルールに従ってデータを更新（ダメージ計算など）
+		// ③ ルールに従ってデータを更新（ダメージ計算、フェーズ移行など）
+		// オフラインなのでこのPC自身が全て計算する
 		logicManager.Update(data);
-
-		// =============================================================
-		// シーンの継続
-		// =============================================================
-		return SceneName::BATTLE; // 通常時はそのまま戦闘シーンを続ける
 	}
+
+	// =============================================================
+	// シーンの継続
+	// =============================================================
+	return SceneName::BATTLE;
 }
 
 void BattleScene::Draw() const {
