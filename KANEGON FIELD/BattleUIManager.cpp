@@ -772,93 +772,103 @@ void BattleUIManager::DrawEndScreen(const BattleData& data) const {
 
 // ダメージ・回復のポップアップ描画
 void BattleUIManager::DrawPopups(const BattleData& data) const {
-    const int startX_atc = 330;     // 攻撃側のプレイヤー関係のポップアップ原点
-    const int startX_def = 660;     // 防御側のプレイヤー関係のポップアップ原点
-    const int startY = 75;
+    const int startX_atc = 117;     // 攻撃側のプレイヤー関係のポップアップ原点
+    const int startX_def = 475;     // 防御側のプレイヤー関係のポップアップ原点
+    const int startY = 70;
     const int marginY = 40;
 
     for (const auto& popup : data.popups) {
-        // 対象プレイヤーのインデックスが不正な場合はスキップ
-        if (popup.playerIdx < 0 || popup.playerIdx >= (int)data.Player_Turn.size()) {
-            continue;
-        }
+        // タイマーが0以下のものは描画をスキップする
+        if (popup.timer <= 0) continue;
 
         // --- アニメーション計算 ---
-        // timerはロジック側で毎フレーム減算されている想定（0で消滅）
         float progress = 0.0f;
-        if (popup.maxTimer > 0) {
-            // 0.0 (発生直後) ～ 1.0 (消滅寸前) の割合を出す
-            progress = 1.0f - ((float)popup.timer / popup.maxTimer);
-        }
+        if (popup.maxTimer > 0) progress = 1.0f - ((float)popup.timer / popup.maxTimer);
 
-        // --- 座標の決定（攻撃側・防御側の振り分け） ---
-        int drawX = 0;
-        int drawY = 0;
+        // 基本位置の算出
+        int drawX = (popup.playerIdx == data.currentTurnIdx) ? startX_atc : startX_def;
+        int baseY = startY + (popup.playerIdx * marginY);
 
-        // 浮き上がる量
+        // ダメージ系は下へ、回復系は上へ
         int floatOffsetY = (int)(progress * 40.0f);
+        bool isUpward = (popup.type != PopupType::Damage);
+        int drawY = isUpward ? (baseY - floatOffsetY) : (baseY + floatOffsetY);
 
-        if (popup.playerIdx == data.currentTurnIdx) {
-            // 【攻撃側】（現在のターンプレイヤー）
-            drawX = startX_atc;
-
-            // 攻撃側は所定の場所に1人表示されている想定なので、marginYの掛け算は省略
-            // ※もし攻撃側もリストで並んでいる場合は `+ (popup.playerIdx * marginY)` を足してください
-            drawY = startY - popup.offsetY - floatOffsetY;
-        }
-        else {
-            // 【防御側】（ターゲット、または全体攻撃に巻き込まれた他のプレイヤー）
-            drawX = startX_def;
-
-            // 防御側は上からリスト表示されている想定で marginY を掛けて位置をずらす
-            drawY = startY + (popup.playerIdx * marginY) - popup.offsetY - floatOffsetY;
+        // --- 色の設定（デザインに合わせて調整） ---
+        unsigned int boxCol = 0x808080; // デフォルトグレー
+        switch (popup.type) {
+        case PopupType::Damage:   boxCol = 0xB22222; break; // 赤（濃い赤）
+        case PopupType::Heal:     boxCol = 0x228B22; break; // 緑
+        case PopupType::MagicHeal:boxCol = 0x6A5ACD; break; // 紫（画像の色に寄せました）
+        case PopupType::Parry:
+        case PopupType::Counter:  boxCol = 0xD4AF37; break; // 金色
+        default:                  boxCol = 0x555555; break;
         }
 
-        // --- フェードアウトの計算 ---
-        // 残り30フレームを切ったら徐々に透明にする
-        int alpha = 255;
-        const int fadeFrames = 30;
-        if (popup.timer < fadeFrames) {
-            alpha = (255 * popup.timer) / fadeFrames;
-        }
+        // --- 描画 ---
+        // 影（少しずらして黒を描画すると立体感が出ます）
+        DrawRoundRect(drawX - 90, drawY - 20, drawX + 90, drawY + 20, 15, 15, 0x000000, TRUE);
+        // 本体のボックス
+        DrawRoundRect(drawX - 90, drawY - 20, drawX + 90, drawY + 20, 15, 15, boxCol, TRUE);
+        // 枠線
+        DrawRoundRect(drawX - 90, drawY - 20, drawX + 90, drawY + 20, 15, 15, 0xFFFFFF, FALSE);
 
-        // --- 描画設定 ---
-        SetDrawBlendMode(DX_BLENDMODE_ALPHA, alpha);
-
-        int fontHandle = Font.GetSmall(); // ポップアップ用のフォント
-        int outlineColor = Col.GetBla();
-
-        // テキスト表示（「パリィ！」等）の場合は、文字幅があるので少し左にずらして中央に寄せる
-        if (popup.type == PopupType::Text) {
-            drawX -= 20;
-        }
-
-        // --- テキストの描画（縁取り付き） ---
-        // 上下左右に1pxずらして黒で描画し、視認性を上げる
-        DrawFormatStringToHandle(drawX - 1, drawY - 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
-        DrawFormatStringToHandle(drawX + 1, drawY - 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
-        DrawFormatStringToHandle(drawX - 1, drawY + 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
-        DrawFormatStringToHandle(drawX + 1, drawY + 1, outlineColor, fontHandle, _T("%s"), popup.text.c_str());
-
-        // 本体テキストの描画
-        DrawFormatStringToHandle(drawX, drawY, popup.color, fontHandle, _T("%s"), popup.text.c_str());
-
-        // ブレンドモードを必ず元に戻す
-        SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
+        // 文字描画（中央揃え）
+        int fontHandle = Font.GetSmall(); // 必要に応じて太字設定のフォントに変更してください
+        int strWidth = GetDrawStringWidthToHandle(popup.text.c_str(), (int)popup.text.length(), fontHandle);
+        DrawFormatStringToHandle(drawX - strWidth / 2, drawY - 8, 0xFFFFFF, fontHandle, _T("%s"), popup.text.c_str());
     }
 }
 
 // 換（ステータス変更）ウィンドウの描画
 void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
-    // 画面中央にウィンドウを描画
-    DrawBox(300, 200, 700, 400, Col.GetBla(), TRUE);
-    DrawBox(305, 205, 695, 395, Col.GetBoxYel(), TRUE);
+    // 背景
+    DrawRoundRect(250, 180, 750, 420, 20, 20, Col.GetWhi(), TRUE);
+    DrawRoundRect(250, 180, 750, 420, 20, 20, Col.GetBla(), FALSE);
 
-    // 現在の変更予定値を表示
-    DrawFormatString(350, 270, Col.GetBla(), _T("変更MP: %d"), data.changeMP);
-    DrawFormatString(350, 310, Col.GetBla(), _T("変更金額: %d"), data.changeMoney);
+    // タイトル
+    DrawString(430, 200, _T("ステータス変更"), Col.GetBla());
 
-    // ※入力処理側（BattleInputManager等）で、この座標をクリックした際に値を増減させる処理が必要です
+    // 現在のターンプレイヤーを取得
+    const Player& p = data.Player_Turn[data.currentTurnIdx];
+    int hp = p.getHp();
+    int mp = p.getMp();
+    int money = p.getMoney();
+
+    // --- ステータス表示エリア ---
+    // ※ ロジック側で「現在選択中のステータス（HP/MP/お金）」を管理する変数
+    // （例: data.changeTargetStatus）がある前提のUIハイライト表現です。
+    int statX = 300;
+    int statY = 250;
+
+    DrawFormatStringToHandle(statX, statY, Col.GetBla(), Font.GetSmall(), _T("HP: %3d"), hp);
+    DrawFormatStringToHandle(statX, statY + 50, Col.GetBla(), Font.GetSmall(), _T("MP: %3d"), mp);
+    DrawFormatStringToHandle(statX, statY + 100, Col.GetBla(), Font.GetSmall(), _T("￥: %3d"), money);
+
+    // --- ボタンエリア ---
+    int btnW = 60, btnH = 35;
+    int startX = 480;
+    int startY = 240;
+
+    int offsets[] = { 10, 1, -1, -10 };
+    for (int i = 0; i < 4; ++i) {
+        int x = startX + (i * 70); // 横並びに変更して押しやすくする
+        int y = statY + 100;       // 下部に配置
+
+        // ホバー判定（BattleOptionのインデックス定義に合わせて適宜変更してください）
+        // bool isHover = data.isHoverIdx[BattleOption::CHANGE_PLUS_10 + i];
+        bool isHover = false; // 仮置き
+        unsigned int col = isHover ? Col.GetCurYel() : 0xD4AF37;
+
+        DrawRoundRect(x, y, x + btnW, y + btnH, 5, 5, col, TRUE);
+        DrawRoundRect(x, y, x + btnW, y + btnH, 5, 5, Col.GetBla(), FALSE);
+
+        TCHAR buf[16];
+        _stprintf_s(buf, _T("%+d"), offsets[i]);
+
+        int textW = GetDrawStringWidth(buf, (int)_tcslen(buf));
+        DrawString(x + (btnW - textW) / 2, y + 10, buf, Col.GetBla());
+    }
 }
 
 // 買（購入確認）ウィンドウの描画

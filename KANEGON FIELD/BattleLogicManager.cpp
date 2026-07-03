@@ -555,6 +555,14 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
         attacker.setMoney(attacker.getMoney() + data.changeMoney);
         int hpCost = data.changeMP + data.changeMoney;
         attacker.setHp(attacker.getHp() - hpCost);
+
+        // ポップアップ登録 (自身へのダメージ/回復)
+        if (hpCost > 0) {
+            data.popups.push_back({ PopupType::Damage, data.currentTurnIdx, std::to_string(hpCost), 0xFF0000, 0, 60 });
+        }
+        else if (hpCost < 0) {
+            data.popups.push_back({ PopupType::Heal, data.currentTurnIdx, std::to_string(-hpCost), 0x00FF00, 0, 60 });
+        }
     }
     else if (name == "チョイスチョイス") {
         if (data.selectedOption == BattleOption::BUY_YES && target != nullptr && data.buyTargetCardIdx != -1) {
@@ -579,7 +587,6 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
         const Card& sellCard = attacker.Hand.GetCards()[sellItemIdx];
 
         int price = sellCard.GetMoney();
-        if (sellCard.GetCategory() == CardCategory::Magic) price = 0; // 奇跡は0円
 
         // 売りつけたお金をアタッカー(自分)がもらう
         attacker.setMoney(attacker.getMoney() + price);
@@ -607,6 +614,9 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
                 target->Status.dead = true;
             }
         }
+
+        // 売却額のポップアップ
+        data.popups.push_back({ PopupType::Money, data.currentTurnIdx, "+￥" + std::to_string(price), 0xFFFF00, 0, 60 });
     }
 
     // カテゴリで大きく分岐
@@ -617,6 +627,9 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
             // 回復量を記録(UI用データ保持)
             data.lastHealingDone += card.GetPower();
             data.resultTargetIdx = data.targetIdx;
+
+            // 回復ポップアップ
+            data.popups.push_back({ PopupType::Heal, data.targetIdx, std::to_string(card.GetPower()), 0x00FF00, 0, 60 });
         }
     }
     // MP回復カードの処理
@@ -628,6 +641,9 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
             // UI側に回復量を表示するための記録（HP回復と共用にするかはお好みで調整してください）
             data.lastHealingDone += card.GetPower();
             data.resultTargetIdx = data.targetIdx;
+
+            // MP回復ポップアップ
+            data.popups.push_back({ PopupType::MagicHeal, data.targetIdx, std::to_string(card.GetPower()), 0x0000FF, 0, 60 });
         }
     }
     else if (card.GetCategory() == CardCategory::Magic) {
@@ -901,7 +917,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 「山」の条件成立時
     if (data.isParry && hasMagicAttack) {
-        data.popups.push_back({ PopupType::Text, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
+        data.popups.push_back({ PopupType::Parry, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
 
         // カウンター攻撃として、受けるはずだったダメージと属性を「保留」にする
         data.isPendingAttack = true;
@@ -948,7 +964,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 無属性攻撃を無効化
     if (data.isImmune && attack.type == "無") {
-        data.popups.push_back({ PopupType::Text, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
+        data.popups.push_back({ PopupType::NoHit, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
         return;
     }
 
@@ -969,12 +985,12 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
             target.setHp(0);
             target.Status.dead = true;
         }
-        data.popups.emplace_back(PopupType::Number, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+        data.popups.emplace_back(PopupType::Damage, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
 
         // スティール（HP吸収処理）
         if (data.isDrain && finalDamage > 0) {
             attacker.setHp(attacker.getHp() + finalDamage);
-            data.popups.emplace_back(PopupType::Number, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+            data.popups.emplace_back(PopupType::Heal, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
         }
     }
 }

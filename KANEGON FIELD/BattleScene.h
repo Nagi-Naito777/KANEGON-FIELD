@@ -13,7 +13,8 @@ class BattleScene :public IScene
 private:
 	NetworkManager* netManager = nullptr; // 通信管理へのポインタ
 
-	BattleData data; // 全てのデータ変数等の格納場所
+	BattleData data;           // 共有データ
+	LocalClientData localData; // ローカル用データ
 
 	// マネージャーたち
 	BattleInputManager inputManager;

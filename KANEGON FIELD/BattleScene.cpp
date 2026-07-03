@@ -14,13 +14,9 @@
 
 // コンストラクタの実装
 BattleScene::BattleScene() {
-	// 配列の初期化
-	// ※fillを使えばアドレス指定で配列を初期化できる
-	std::fill(std::begin(data.isHoverIdx), std::end(data.isHoverIdx), false);
-	std::fill(std::begin(data.isHoverCardIdx), std::end(data.isHoverCardIdx), false);
-	std::fill(std::begin(data.isHoverPlayerIdx), std::end(data.isHoverPlayerIdx), false);
-
-	data.currentTurnIdx = 0;
+	// メンバ変数の初期化
+	data.Clear();
+	localData.Clear();
 }
 
 // デストラクタの実装(実際はnewとか使った場合に使用する様子)
@@ -30,6 +26,7 @@ BattleScene::~BattleScene() {
 void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 	// 完全初期化
 	data.Clear();
+	localData.Clear();
 
 	// 外部からちゃんとプレイヤーが渡された時だけ上書きする
 	if (!initialPlayers.empty()) {
@@ -81,7 +78,8 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 
 	// ターン順をシャッフル
 	std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
-	// カード配布（ここで初期カードが配られるため、画面に描画されるようになります）
+
+	// カード配布
 	for (auto& player : data.Player_Turn) {
 		for (int i = 0; i < 9; ++i) {
 			player.Hand.Add(CardDB.GetRandomCard());
@@ -89,13 +87,16 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 		player.Hand.Sort();
 	}
 
-	// 内部状態のリセット
+	// --- 自分のプレイヤーIDを最初に特定して保持する ---
+	localData.myPlayerIndex = 0;
+	for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+		if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
+			localData.myPlayerIndex = i;
+			break;
+		}
+	}
+
 	data.currentTurnIdx = 0;
-	data.targetIdx = -1;
-	data.playerTarget = false;
-	data.selectedCards.clear();
-	data.attackTotalPower = 0;
-	data.defenseTotalPower = 0;
 	data.currentPhase = BattlePhase::Select;
 }
 
@@ -105,29 +106,17 @@ SceneName BattleScene::Update(const InputManager& input) {
 		return SceneName::BATTLE;
 	}
 
-	// =============================================================
-	// 自分自身の特定
-	// =============================================================
-	int myPlayerIdx = 0;
-	for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-		if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
-			myPlayerIdx = i;
-			break;
-		}
-	}
-
-	Player& myPlayer = data.Player_Turn[myPlayerIdx];
-	bool isMyTurn = (data.currentTurnIdx == myPlayerIdx);
+	// 自分のプレイヤー参照（localData.myPlayerIndexを使用）
+	Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
+	bool isMyTurn = (data.currentTurnIdx == localData.myPlayerIndex);
 
 	// =============================================================
-	// 入力の取得(フェーズの進行は無し)
+	// 入力の取得（localDataを引数に追加）
 	// =============================================================
-	PlayerAction myAction = inputManager.Update(data, input, myPlayer, myPlayerIdx, isMyTurn);
+	// UI操作やカード選択の履歴はすべて localData に反映される
+	PlayerAction myAction = inputManager.Update(data, localData, input, myPlayer, localData.myPlayerIndex, isMyTurn);
 
-	if (myAction.isSurrender) {
-		// ※オンライン時は相手に切断や降参パケットを送る処理が必要になります
-		return SceneName::SELECT;
-	}
+	if (myAction.isSurrender) return SceneName::SELECT;
 
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
 
@@ -135,13 +124,14 @@ SceneName BattleScene::Update(const InputManager& input) {
 	// 通信対戦時の処理
 	// =============================================================
 	if (isOnline) {
-		// 【1. 受信処理】相手やホストからの状態更新を反映
+		// 【1. 受信処理】
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
+			// ホストから送られてきた状態を data (共有) に反映
 			if (packet.type == CommandType::SYNC_PHASE) {
-				// ホストからフェーズ変更の合図が来たら、初めて自分の画面を進める
 				data.currentPhase = static_cast<BattlePhase>(packet.value1);
-				data.animFrame = 0;
+				// 演出リセットは localData 側で行う
+				localData.animFrame = 0;
 			}
 			// クライアントからの「攻撃ボタン押したよ」を受信したホストの処理
 			else if (packet.type == CommandType::START_BATTLE /* 便宜上、ACTION_ATTACKと読み替えてください */) {
@@ -149,7 +139,7 @@ SceneName BattleScene::Update(const InputManager& input) {
 					// ここで相手の選んだカード情報などをdataに反映し、フェーズを進める
 					BattlePhase nextPhase = BattlePhase::DefenseSelect; // 状況に応じて分岐
 					data.currentPhase = nextPhase;
-					data.animFrame = 0;
+					localData.animFrame = 0;
 
 					// 結果を全員に配る
 					GamePacket syncP;
@@ -160,30 +150,21 @@ SceneName BattleScene::Update(const InputManager& input) {
 			}
 		}
 
-		// 【2. アクション送信処理】ボタンを押した結果を通信に乗せる
+		// 【2. アクション送信処理】
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
 				if (netManager->IsHost()) {
-					// 自分がホストなら、即座にフェーズを進めて全員に配る
-					BattlePhase nextPhase = BattlePhase::DefenseSelect;
-					// ※回復なら DefenseReveal になる等の分岐を後で追加します
-					data.currentPhase = nextPhase;
-					data.animFrame = 0;
-
-					GamePacket syncP;
-					syncP.type = CommandType::SYNC_PHASE;
-					syncP.value1 = (int)nextPhase;
-					netManager->BroadcastPacket(syncP);
+					// ホストは直接フェーズを更新
+					data.currentPhase = BattlePhase::DefenseSelect;
+					localData.animFrame = 0;
+					// 他全員に同期
+					netManager->BroadcastPacket(CommandType::SYNC_PHASE, (int)data.currentPhase);
 				}
 				else {
-					// クライアントなら、ホストに「攻撃した」と送って待機する
-					GamePacket p;
-					p.type = CommandType::START_BATTLE; // 便宜上。後で ACTION_ATTACK を作ってください
-					// p.value1 = data.targetIdx; などを後で乗せます
-					netManager->SendPacket(p);
+					// クライアントはサーバーに送信
+					netManager->SendPacket(CommandType::START_BATTLE);
 				}
 			}
-			// isDefenseDecision の場合も同様に処理します
 		}
 
 		// 【3. ロジック計算】ホストのみがゲーム進行を管理
@@ -192,23 +173,23 @@ SceneName BattleScene::Update(const InputManager& input) {
 		}
 	}
 	// =============================================================
-	// AI対戦（オフライン時）の処理
+	// AI対戦（オフライン）の処理
 	// =============================================================
 	else {
-		// オフラインなら、ボタンが押された瞬間に自分でフェーズを進める
+		// オフラインなら、決定ボタンが押されたら直接フェーズを進める
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
-				// 回復系カードなら直接 DefenseReveal、そうでなければ DefenseSelect
 				data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
-				data.animFrame = 0;
+				localData.animFrame = 0;
 			}
 			else if (myAction.isDefenseDecision) {
 				data.currentPhase = BattlePhase::DefenseReveal;
-				data.animFrame = 0;
+				localData.animFrame = 0;
 			}
 		}
 
-		aiManager.Update(data, myPlayerIdx, isMyTurn);
+		// AIは共有データ(data)を見て判断し、共有データを更新する
+		aiManager.Update(data, localData.myPlayerIndex, isMyTurn);
 		logicManager.Update(data);
 	}
 
@@ -216,12 +197,12 @@ SceneName BattleScene::Update(const InputManager& input) {
 }
 
 void BattleScene::Draw() const {
-
-	// 【重要】UIマネージャーが計算する前の「生のデータ」を画面に直接出す
+	// デバッグ用表示などもlocalDataの情報を考慮可能
 	DrawFormatString(0, 0, Col.GetBla(), "Phase: %d", (int)data.currentPhase);
-	DrawFormatString(0, 20, Col.GetBla(), "PlayerCount: %d", (int)data.Player_Turn.size());
-	DrawFormatString(0, 40, Col.GetBla(), "TurnIdx: %d", data.currentTurnIdx);
+	DrawFormatString(0, 20, Col.GetBla(), "MyIndex: %d", localData.myPlayerIndex);
 
-    // 描画はデータを見てUIマネージャーに任せる
-    uiManager.Draw(data);
+	// 【重要】UIマネージャーには両方のデータを渡す
+	// data: 全員共通のゲーム状態
+	// localData: 自分の端末のUI状態
+	uiManager.Draw(data, localData);
 }

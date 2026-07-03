@@ -22,34 +22,28 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 	// =============================================================
 	if (data.currentPhase == BattlePhase::Select && !isHumanTurn) {
 
-		data.selectedCards.clear();
+		// --- 確定用データのリセット ---
+		data.confirmedAttackCards.clear();
 
 		// 手札全体の選択可否を更新（防御専用カード等をここで一括除外する）
 		logic.UpdateCardSelectability(data, turnPlayer, true);
 
 		int currentMp = turnPlayer.getMp();
-		// 攻撃用と回復用のベストなカードを記録する変数
-		int bestAttackIndex = -1;	// 攻撃用
-		int maxAttackPower = -1;	// 回復用
+		int bestAttackIndex = -1, maxAttackPower = -1;
+		int bestHealIndex = -1, maxHealPower = -1;
 
-		int bestHealIndex = -1;
-		int maxHealPower = -1;
-
-		// --- 手札から【MPが足りる】かつ【一番強い】攻撃カードと回復カードを探す ---
+		// --- 候補の選定 ---
 		for (int i = 0; i < (int)hand.size(); ++i) {
-			if (hand[i].GetMP() > currentMp) continue; // MP不足は除外
+			if (hand[i].GetMP() > currentMp) continue;
 
 			CardCategory cat = hand[i].GetCategory();
-
 			if (cat == Healing || cat == MagicHealing) {
-				// 回復カードの候補
 				if (hand[i].GetPower() > maxHealPower) {
 					maxHealPower = hand[i].GetPower();
 					bestHealIndex = i;
 				}
 			}
 			else if (cat != Defense) {
-				// 攻撃・魔法・全体などの攻撃系カードの候補
 				if (hand[i].GetPower() > maxAttackPower) {
 					maxAttackPower = hand[i].GetPower();
 					bestAttackIndex = i;
@@ -62,102 +56,69 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 
 		// --- 行動の決定（回復か攻撃か） ---
 		if (bestHealIndex != -1 && bestAttackIndex != -1) {
-			// 両方持っている場合はランダムで決定
-			// ※プレイヤーのHPを取得できるなら「if (HPが減っていたら) useHeal = true;」とするのがオススメです
 			useHeal = (rand() % 2 == 0);
 			bestIndex = useHeal ? bestHealIndex : bestAttackIndex;
 		}
 		else if (bestHealIndex != -1) {
-			useHeal = true;
-			bestIndex = bestHealIndex;
+			useHeal = true; bestIndex = bestHealIndex;
 		}
 		else if (bestAttackIndex != -1) {
-			useHeal = false;
-			bestIndex = bestAttackIndex;
+			useHeal = false; bestIndex = bestAttackIndex;
 		}
 
-		// --- カードが選べた場合 ---
+		// --- 行動の確定 ---
 		if (bestIndex != -1) {
-			data.selectedCards.push_back(bestIndex);
+			data.confirmedAttackCards.push_back(bestIndex);
 			currentMp -= hand[bestIndex].GetMP();
 			int totalPower = hand[bestIndex].GetPower();
 
 			if (useHeal) {
-				// 【回復カードの場合】
-				data.attackTotalPower = totalPower;   // 回復量としてセット
-				data.targetIdx = data.currentTurnIdx; // ターゲットは自分自身に固定
+				data.attackTotalPower = totalPower;
+				data.targetIdx = data.currentTurnIdx;
 				data.playerTarget = true;
-
-				// 回復は防御フェーズが不要なので、即座に演出フェーズへ移行
+				// フェーズ移行のみ行う（アニメーションリセットはUI側の管理に任せる）
 				data.currentPhase = BattlePhase::DefenseReveal;
-				data.revealIndex = 0;
-				data.animDefenseCardCount = 0;
-				data.animationTimer = 0;
 			}
 			else {
-				// 【攻撃カードの場合】
+				// 攻撃の場合のコンボロジック
 				CardCategory baseCat = hand[bestIndex].GetCategory();
-
-				// ベースカードの属性をセット
 				data.currentAttackElement = hand[bestIndex].GetType();
 
-				// ベースが全体攻撃（All）ではない場合のみ加算を許可する
 				if (baseCat != All) {
 					for (int i = 0; i < (int)hand.size(); ++i) {
 						if (i == bestIndex) continue;
-						if (!data.isCardSelectable[i]) continue; // 選択不可カードは除外
+						if (!data.isCardSelectable[i]) continue;
 
 						CardCategory cat = hand[i].GetCategory();
-						bool isAddableCategory = (cat == Attack || cat == Magic);
+						if ((cat == Attack || cat == Magic) && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
 
-						if (isAddableCategory && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
-							// コンボした際の属性変化をシミュレーション
-							std::vector<int> tempSelected = data.selectedCards;
+							std::vector<int> tempSelected = data.confirmedAttackCards;
 							tempSelected.push_back(i);
 							std::string nextElement = logic.GetCombinedElement(tempSelected, hand);
 
-							// コンボによって有益な属性が「無」になってしまうならAIは追加を避ける
-							if (data.currentAttackElement != "無" && nextElement == "無") {
-								continue;
-							}
+							if (data.currentAttackElement != "無" && nextElement == "無") continue;
 
-							data.selectedCards.push_back(i);
+							data.confirmedAttackCards.push_back(i);
 							currentMp -= hand[i].GetMP();
 							totalPower += hand[i].GetPower();
-
-							// 共通ロジックから算出された正確な属性で更新
 							data.currentAttackElement = nextElement;
 						}
 					}
 				}
-
 				data.attackTotalPower = totalPower;
 
-				// 生きている敵（自分以外）からランダムにターゲットを選ぶ
+				// ターゲット選定
 				std::vector<int> aliveEnemies;
 				for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-					if (i != data.currentTurnIdx && !data.Player_Turn[i].Status.dead) {
-						aliveEnemies.push_back(i);
-					}
+					if (i != data.currentTurnIdx && !data.Player_Turn[i].Status.dead) aliveEnemies.push_back(i);
 				}
-
-				if (!aliveEnemies.empty()) {
-					std::random_device rd;
-					std::mt19937 gen(rd());
-					std::uniform_int_distribution<int> dist(0, aliveEnemies.size() - 1);
-					data.targetIdx = aliveEnemies[dist(gen)];
-				}
-				else {
-					data.targetIdx = data.currentTurnIdx; // フェールセーフ
-				}
+				data.targetIdx = !aliveEnemies.empty() ? aliveEnemies[rand() % aliveEnemies.size()] : data.currentTurnIdx;
 				data.playerTarget = true;
 
-				// 攻撃先が決まったら防御選択フェーズへ
 				data.currentPhase = BattlePhase::DefenseSelect;
 			}
 		}
 		else {
-			// 何もできない場合はターン終了処理へ
 			data.currentTurnIdx = (data.currentTurnIdx + 1) % data.Player_Turn.size();
 		}
 	}
@@ -171,7 +132,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 		if (data.targetIdx != humanIdx && data.targetIdx >= 0 && data.targetIdx < (int)data.Player_Turn.size()) {
 
 			Player& targetPlayer = data.Player_Turn[data.targetIdx];
-			data.selectedDefenseCards.clear();
+			data.confirmedDefenseCards.clear(); // 名前を統一
 
 			int currentMp = targetPlayer.getMp();
 			std::string incomingElement = data.currentAttackElement;
@@ -193,7 +154,7 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 
 					// UIロジックと同じ「コンボとして追加して防げるか」の厳密な判定を利用
 					if (logic.CanSelectDefenseCard(data, targetPlayer, i, incomingElement)) {
-						data.selectedDefenseCards.push_back(i);
+						data.confirmedDefenseCards.push_back(i);
 						currentMp -= targetHand[i].GetMP();
 						totalDefensePower += targetHand[i].GetPower(); // 防御力を加算
 
@@ -209,8 +170,6 @@ void BattleAIManager::Update(BattleData& data, int humanIdx, bool isHumanTurn) {
 
 			// 公開フェーズへ移行
 			data.currentPhase = BattlePhase::DefenseReveal;
-			data.revealIndex = 0;
-			data.animationTimer = 15;
 		}
 	}
 }
