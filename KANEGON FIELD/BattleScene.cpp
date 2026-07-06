@@ -33,51 +33,59 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 		data.Player_Turn = initialPlayers;
 	}
 
-	// 乱数エンジンのセットアップ
-	std::random_device seed_gen;
-	std::mt19937 engine(seed_gen());
+	// オンラインかどうかを判定
+	bool isOnline = (netManager != nullptr && netManager->IsConnected());
+	printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
 
-	// AIの名前候補リスト
-	std::vector<std::string> aiNames = {
-		"ｼﾞﾝﾊﾞﾌﾞｴﾄﾞﾙ太郎", "ｷﾐﾉｶｾﾞﾊﾉﾄﾞｶﾗ", "カオスドゥラゴン", "破滅した世界", "アルコール", "ミセスタニシ",
-		"木下 明憲", "アンドロイド伊藤", "消しゴムｽﾚｲﾔｰ", "マスターゴリラ", "ミーティング次郎", "ﾏｲｹﾙ･ｼﾞｪｲｸｿﾝ",
-		"白川 真昼", "闇川 影虎", "森中 海導", "他人の鉛筆", "暴虐武人マン", "ナギナギ",
-		"清水一登太郎", "怪盗マラカス", "イグラドガネ", "コハクンチョス", "リンクカネゴン", "ネットワーク",
-		"System Error 404", "バチカン", "ブームブーム", "シャングリラ", "ｴﾝﾄﾞﾙｶﾈｺﾞﾝﾌｨｰﾙﾄﾞ", "アサアサ",
-		"アラスカの風", "ハリwood", "マーKING飛高", "謝罪サムライ", "GPT", "EDM", ".cpp",
-		"膝の上からｶﾝﾊﾟﾆｰ", "膝下ｽﾗｲﾃﾞｨﾝｸﾞ渉", "ワールドドリフ", ".h", "Destiny", "enum",
-		"心の歪み", "憎悪", "深淵の戦士 ｱｽﾛﾝ", "leading", "string.h", "using",
-		"黒魔術師 ﾅｲﾄﾒｱ", "神殺しのｱｻﾞﾘｵｽ", "闇の管理人", "エディション", "クラス.h", "カネゴンバレー",
-		"砂岩ガン", "真夏の秋山", "真冬の春海", "ボンゴバナンザ", "ﾗｽﾄｵﾌﾞかねごん", "ﾘﾐﾃｯﾄﾞかねごん",
-		"Kanegon", "ﾀﾞｰｸﾈｽｽﾏｲﾙ", "水しぶき", "かねごん動詞", "かねごん殴って", "終焉のかねごん",
-		"雑草", "かん", "prism", "野菜", "厄災", "国王",
-		"あまよもぎ", "ぁびゃ", "ユウキ", "中央都市かねごん", "かねごん禁忌", "かねごん構成",
-		"カミヒデ", "カラムライア", "白川 大輔", "しずお", "1031", "Clover",
-		"ナンバーコア", "キラ", "カンナ", "忠犬", "79わ", "ひんやり茶",
-		"SML", "あ", "ああああああああ", "紫陽花", "ブーゲンビリア", "ﾀ",
-		"ツチノコ", "ワシじゃよ、ワシ", "強すぎて滅", "マリオネット", "人生楽観思考", "雪谷 久代"
-	};
+	// --- 【重要】AI対戦（オフライン）の時だけ実行する処理 ---
+	if (!isOnline) {
+		// 乱数エンジンのセットアップ
+		std::random_device seed_gen;
+		std::mt19937 engine(seed_gen());
 
-	// AIの名前割り当て
-	std::shuffle(aiNames.begin(), aiNames.end(), engine);
+		// AIの名前候補リスト
+		std::vector<std::string> aiNames = {
+			"ｼﾞﾝﾊﾞﾌﾞｴﾄﾞﾙ太郎", "ｷﾐﾉｶｾﾞﾊﾉﾄﾞｶﾗ", "カオスドゥラゴン", "破滅した世界", "アルコール", "ミセスタニシ",
+			"木下 明憲", "アンドロイド伊藤", "消しゴムｽﾚｲﾔｰ", "マスターゴリラ", "ミーティング次郎", "ﾏｲｹﾙ･ｼﾞｪｲｸｿﾝ",
+			"白川 真昼", "闇川 影虎", "森中 海導", "他人の鉛筆", "暴虐武人マン", "ナギナギ",
+			"清水一登太郎", "怪盗マラカス", "イグラドガネ", "コハクンチョス", "リンクカネゴン", "ネットワーク",
+			"System Error 404", "バチカン", "ブームブーム", "シャングリラ", "ｴﾝﾄﾞﾙｶﾈｺﾞﾝﾌｨｰﾙﾄﾞ", "アサアサ",
+			"アラスカの風", "ハリwood", "マーKING飛高", "謝罪サムライ", "GPT", "EDM", ".cpp",
+			"膝の上からｶﾝﾊﾟﾆｰ", "膝下ｽﾗｲﾃﾞｨﾝｸﾞ渉", "ワールドドリフ", ".h", "Destiny", "enum",
+			"心の歪み", "憎悪", "深淵の戦士 ｱｽﾛﾝ", "leading", "string.h", "using",
+			"黒魔術師 ﾅｲﾄﾒｱ", "神殺しのｱｻﾞﾘｵｽ", "闇の管理人", "エディション", "クラス.h", "カネゴンバレー",
+			"砂岩ガン", "真夏の秋山", "真冬の春海", "ボンゴバナンザ", "ﾗｽﾄｵﾌﾞかねごん", "ﾘﾐﾃｯﾄﾞかねごん",
+			"Kanegon", "ﾀﾞｰｸﾈｽｽﾏｲﾙ", "水しぶき", "かねごん動詞", "かねごん殴って", "終焉のかねごん",
+			"雑草", "かん", "prism", "野菜", "厄災", "国王",
+			"あまよもぎ", "ぁびゃ", "ユウキ", "中央都市かねごん", "かねごん禁忌", "かねごん構成",
+			"カミヒデ", "カラムライア", "白川 大輔", "しずお", "1031", "Clover",
+			"ナンバーコア", "キラ", "カンナ", "忠犬", "79わ", "ひんやり茶",
+			"SML", "あ", "ああああああああ", "紫陽花", "ブーゲンビリア", "ﾀ",
+			"ツチノコ", "ワシじゃよ、ワシ", "強すぎて滅", "マリオネット", "人生楽観思考", "雪谷 久代"
+		};
 
-	int aiNameIdx = 0;
-	for (auto& p : data.Player_Turn) {
-		if (p.getControllerType() == ControllerType::AI) {
-			std::string candidate = aiNames[aiNameIdx];
-			aiNameIdx++;
+		// AIの名前割り当て
+		std::shuffle(aiNames.begin(), aiNames.end(), engine);
 
-			// g_player(ゲームプレイヤー)と名前が被らないようにするロジック
-			if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
-				candidate = aiNames[aiNameIdx];
+		int aiNameIdx = 0;
+		for (auto& p : data.Player_Turn) {
+			if (p.getControllerType() == ControllerType::AI) {
+				std::string candidate = aiNames[aiNameIdx];
 				aiNameIdx++;
-			}
-			p.setName(candidate);
-		}
-	}
 
-	// ターン順をシャッフル
-	std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
+				// g_player(ゲームプレイヤー)と名前が被らないようにするロジック
+				if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
+					candidate = aiNames[aiNameIdx];
+					aiNameIdx++;
+				}
+				p.setName(candidate);
+			}
+		}
+
+		// ターン順をシャッフル
+		std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
+
+	}
 
 	// カード配布
 	for (auto& player : data.Player_Turn) {
@@ -108,8 +116,8 @@ SceneName BattleScene::Update(const InputManager& input) {
 	Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
 	bool isMyTurn = (data.currentTurnIdx == localData.myPlayerIndex);
 
+	// 入力更新
 	PlayerAction myAction = inputManager.Update(data, localData, input, myPlayer, localData.myPlayerIndex, isMyTurn);
-
 	if (myAction.isSurrender) return SceneName::SELECT;
 
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
@@ -118,21 +126,19 @@ SceneName BattleScene::Update(const InputManager& input) {
 	// 通信対戦時の処理
 	// =============================================================
 	if (isOnline) {
+		// パケット受信処理（ホスト・クライアント共通）
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
+			printfDx("DEBUG: Received Packet Type: %d\n", (int)packet.type); // 受信確認用
+
 			if (packet.type == CommandType::SYNC_PHASE) {
 				data.currentPhase = static_cast<BattlePhase>(packet.value1);
 				localData.animFrame = 0;
 			}
 			else if (packet.type == CommandType::START_BATTLE) {
 				if (netManager->IsHost()) {
-					// 相手のアクション内容を受信してdataに反映済みという前提
-					// もし回復行動(ターゲットが自分)なら、防御フェーズをスキップする
-					BattlePhase nextPhase = BattlePhase::DefenseSelect;
-					if (data.targetIdx == data.currentTurnIdx) {
-						nextPhase = BattlePhase::DefenseReveal;
-					}
-
+					// ホストはパケットを受けてフェーズを進行させる
+					BattlePhase nextPhase = (data.targetIdx == data.currentTurnIdx) ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
 					data.currentPhase = nextPhase;
 					localData.animFrame = 0;
 
@@ -144,36 +150,30 @@ SceneName BattleScene::Update(const InputManager& input) {
 			}
 		}
 
+		// アクション送信処理
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
 				if (netManager->IsHost()) {
-					// ホストは直接フェーズを更新（回復判定を考慮）
+					// ホストは直接フェーズ更新
 					BattlePhase nextPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
 					data.currentPhase = nextPhase;
 					localData.animFrame = 0;
 
-					// GamePacket構造体を作ってからブロードキャストする
-					GamePacket syncPacket = {}; // ゼロクリア初期化
-					syncPacket.type = CommandType::SYNC_PHASE;
-					syncPacket.value1 = (int)data.currentPhase;
-
+					GamePacket syncPacket = { CommandType::SYNC_PHASE, (int)data.currentPhase };
 					netManager->BroadcastPacket(syncPacket);
 				}
 				else {
-					// ★修正: GamePacket構造体を作ってからサーバー(ホスト)に送信する
-					GamePacket sendPacket = {}; // ゼロクリア初期化
-					sendPacket.type = CommandType::START_BATTLE;
-					// 必要であれば sendPacket.value1 などに選んだカードの情報などを入れる
-
+					// クライアントはホストに依頼（リクエスト）を送信
+					printfDx("DEBUG: Sending START_BATTLE request\n"); // 送信確認用
+					GamePacket sendPacket = { CommandType::START_BATTLE };
 					netManager->SendPacket(sendPacket);
 				}
 			}
 		}
-
-		// ホストのみがゲーム進行・AIを管理
+		// ゲーム進行権限（ホストのみがロジックを回す）
 		if (netManager->IsHost()) {
 			logicManager.Update(data, localData);
-			aiManager.Update(data); // 通信環境下でも、誰かが落ちた際の代打ちなどに対応可能
+			aiManager.Update(data);
 		}
 	}
 	// =============================================================
@@ -191,7 +191,7 @@ SceneName BattleScene::Update(const InputManager& input) {
 			}
 		}
 
-		// 引数を減らしてシンプルに。内部でControllerTypeを見て動作する
+		// オフライン時は自分たちで進行させる
 		aiManager.Update(data);
 		logicManager.Update(data, localData);
 	}
