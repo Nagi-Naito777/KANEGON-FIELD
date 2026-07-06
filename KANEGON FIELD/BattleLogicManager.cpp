@@ -3,22 +3,22 @@
 #include "Player.h"
 #include <algorithm> // ソート用
 
-// カードの選択可否を更新するベース関数
-void BattleLogicManager::UpdateCardSelectability(BattleData& data, const Player& player, bool isAttackTurn) {
+// カードの選択可否を更新する関数
+void BattleLogicManager::UpdateCardSelectability(const BattleData& data, LocalClientData& local, const Player& player) {
     const auto& hand = player.Hand.GetCards();
 
     // isCardSelectableの配列サイズを手札の枚数に合わせる
-    if (data.isCardSelectable.size() != hand.size()) {
-        data.isCardSelectable.resize(hand.size(), true);
+    if (local.isCardSelectable.size() != hand.size()) {
+        local.isCardSelectable.resize(hand.size(), true);
     }
 
     for (size_t i = 0; i < hand.size(); ++i) {
         const auto& card = hand[i];
-        data.isCardSelectable[i] = true; // 基本は選択可能（明るい状態）として初期化
+        local.isCardSelectable[i] = true; // 基本は選択可能（明るい状態）として初期化
 
         // MP不足チェック（絶対選択不可）
         if (player.getMp() < card.GetMP()) {
-            data.isCardSelectable[i] = false;
+            local.isCardSelectable[i] = false;
             continue;
         }
 
@@ -27,11 +27,11 @@ void BattleLogicManager::UpdateCardSelectability(BattleData& data, const Player&
             // 【攻撃フェーズ】
             // 防具カテゴリは不可
             if (card.GetCategory() == Defense) {
-                data.isCardSelectable[i] = false;
+                local.isCardSelectable[i] = false;
             }
             // 防御系の奇跡（山、キャッスル等）も攻撃フェーズでは不可
             if (card.GetCategory() == Magic && (card.GetName() == "山" || card.GetName() == "キャッスル")) {
-                data.isCardSelectable[i] = false;
+                local.isCardSelectable[i] = false;
             }
         }
         else if (data.currentPhase == BattlePhase::DefenseSelect) {
@@ -41,52 +41,52 @@ void BattleLogicManager::UpdateCardSelectability(BattleData& data, const Player&
 
             // 防具、バイリンガル、防御系の奇跡「以外」は不可
             if (card.GetCategory() != Defense && card.GetCategory() != Bilingual && !isDefenseMagic) {
-                data.isCardSelectable[i] = false;
+                local.isCardSelectable[i] = false;
             }
         }
     }
 }
 
-void BattleLogicManager::Update(BattleData& data) {
+void BattleLogicManager::Update(BattleData& data, LocalClientData& local) {
     // 全体の汎用アニメーションフレームを更新
-    data.animFrame++;
+    local.animFrame++;
 
     // カード表示のアニメーション処理
-    UpdateCardAnimation(data);
+    UpdateCardAnimation(data, local);
 
     // =============================================================
     // 各バトルのフェーズ進行(ステートマシン)
     // =============================================================
     switch (data.currentPhase) {
     case BattlePhase::Select:
-        ProcessSelectPhase(data);
+        ProcessSelectPhase(data, local);
         break;
     case BattlePhase::DefenseSelect:
-        ProcessDefenseSelectPhase(data);
+        ProcessDefenseSelectPhase(data, local);
         break;
     case BattlePhase::AttackReveal:
-        ProcessAttackRevealPhase(data);
+        ProcessAttackRevealPhase(data, local);
         break;
     case BattlePhase::TargetDisplay:
-        ProcessTargetDisplayPhase(data);
+        ProcessTargetDisplayPhase(data, local);
         break;
     case BattlePhase::DefenseReveal:
-        ProcessDefenseRevealPhase(data);
+        ProcessDefenseRevealPhase(data, local);
         break;
     case BattlePhase::Effect:
-        ProcessEffectPhase(data);
+        ProcessEffectPhase(data, local);
         break;
     case BattlePhase::DamageResult:
-        ProcessDamageResultPhase(data);
+        ProcessDamageResultPhase(data, local);
         break;
     case BattlePhase::Idle:
-        ProcessIdlePhase(data);
+        ProcessIdlePhase(data, local);
         break;
     case BattlePhase::ChangeStatusEdit:
-        ProcessChangeStatusEditPhase(data);
+        ProcessChangeStatusEditPhase(data, local);
         break;
     case BattlePhase::BuyConfirm:
-        ProcessBuyConfirmPhase(data);
+        ProcessBuyConfirmPhase(data, local);
         break;
     case BattlePhase::End:
         break;
@@ -96,20 +96,20 @@ void BattleLogicManager::Update(BattleData& data) {
 // -------------------------------------------------------------
 // 攻撃カード選択フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
+void BattleLogicManager::ProcessSelectPhase(BattleData& data, LocalClientData& local) {
     if (data.Player_Turn.empty()) return;
 
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
     // 選択状態の自動切り替え
-    if (data.selectedCards.size() >= 2) {
-        int lastIdx = data.selectedCards.back(); // 最後にクリックされたカード
+    if (local.localSelectingCards.size() >= 2) {
+        int lastIdx = local.localSelectingCards.back(); // 最後にクリックされたカード
         const std::string& lastCardName = attacker.Hand.GetCards()[lastIdx].GetName();
 
         bool lastIsSell = (lastCardName == "バイバイ");
         bool lastIsSingle = (lastCardName == "チョイスチョイス" || lastCardName == "イコールイコール");
 
-        int firstIdx = data.selectedCards.front(); // 最初に選ばれていたカード
+        int firstIdx = local.localSelectingCards.front(); // 最初に選ばれていたカード
         const std::string& firstCardName = attacker.Hand.GetCards()[firstIdx].GetName();
 
         bool firstIsSell = (firstCardName == "バイバイ");
@@ -117,32 +117,32 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
 
         if (lastIsSell || lastIsSingle) {
             // あとから特殊カード(売・買・換)がクリックされた場合、これまでの選択を捨ててその特殊カードに切り替える
-            data.selectedCards.clear();
-            data.selectedCards.push_back(lastIdx);
+            local.localSelectingCards.clear();
+            local.localSelectingCards.push_back(lastIdx);
         }
         else if (firstIsSingle) {
             // 先に「買」「換」を選択中に別のカードがクリックされた場合、新しいそのカードに切り替える
-            data.selectedCards.clear();
-            data.selectedCards.push_back(lastIdx);
+            local.localSelectingCards.clear();
+            local.localSelectingCards.push_back(lastIdx);
         }
         else if (firstIsSell) {
             // 先に「売」を選択していて、新しいカード（売り物）がクリックされた場合
             // すでに「売＋売り物」が揃っている状態でさらに3枚目がクリックされたら、売り物を最新のものに切り替える
-            if (data.selectedCards.size() >= 3) {
-                data.selectedCards.clear();
-                data.selectedCards.push_back(firstIdx); // 「売」は維持
-                data.selectedCards.push_back(lastIdx);  // 最後に選んだものを新しい「売り物」にする
+            if (local.localSelectingCards.size() >= 3) {
+                local.localSelectingCards.clear();
+                local.localSelectingCards.push_back(firstIdx); // 「売」は維持
+                local.localSelectingCards.push_back(lastIdx);  // 最後に選んだものを新しい「売り物」にする
             }
         }
     }
 
     // カテゴリ等の基本制限を適用
     // ここで一旦、攻撃フェーズの基本ルール（防具不可など）が適用される
-    UpdateCardSelectability(data, attacker, true);
+    UpdateCardSelectability(data, local, attacker);
 
     // 「売」カードが既に選択されているかチェック
     bool hasSellCard = false;
-    for (int idx : data.selectedCards) {
+    for (int idx : local.localSelectingCards) {
         if (attacker.Hand.GetCards()[idx].GetName() == "バイバイ") {
             hasSellCard = true;
             break;
@@ -154,22 +154,22 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
         const Card& card = attacker.Hand.GetCards()[i];
 
         // すでに選択されているカード自身は、UIで再度クリックして解除できるよう選択可能にしておく
-        auto it = std::find(data.selectedCards.begin(), data.selectedCards.end(), i);
-        if (it != data.selectedCards.end()) {
-            data.isCardSelectable[i] = true;
+        auto it = std::find(local.localSelectingCards.begin(), local.localSelectingCards.end(), i);
+        if (it != local.localSelectingCards.end()) {
+            local.isCardSelectable[i] = true;
             continue;
         }
 
         if (hasSellCard) {
             // 【「売」モードの場合】
-            if (data.selectedCards.size() >= 2) {
+            if (local.localSelectingCards.size() >= 2) {
                 // 既に「売＋売り物」の2枚が揃っているなら、他のカードはロックして暗くする
-                data.isCardSelectable[i] = false;
+                local.isCardSelectable[i] = false;
             }
             else {
                 // 売り物を選んでいない状態なら、すべてのカードを売り物候補として選択可能にする！
                 // （UpdateCardSelectability で弾かれた防具やMP不足カードもここで true に上書き復活する）
-                data.isCardSelectable[i] = true;
+                local.isCardSelectable[i] = true;
             }
         }
         else {
@@ -177,7 +177,7 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
 
             // MP不足の奇跡カード制限
             if (!CanUseMiracleCard(attacker, card)) {
-                data.isCardSelectable[i] = false;
+                local.isCardSelectable[i] = false;
                 continue;
             }
 
@@ -191,32 +191,32 @@ void BattleLogicManager::ProcessSelectPhase(BattleData& data) {
 // -------------------------------------------------------------
 // 防御カード選択フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data) {
+void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data, LocalClientData& local) {
     if (data.targetIdx < 0 || data.targetIdx >= (int)data.Player_Turn.size()) return;
 
     Player& defender = data.Player_Turn[data.targetIdx];
 
     // --- 属性相性やカテゴリ等の基本制限を適用 ---
-    UpdateCardSelectability(data, defender, false);
+    UpdateCardSelectability(data, local, defender);
 
     for (size_t i = 0; i < defender.Hand.GetCards().size(); ++i) {
         // 属性や回復処理中の制限
-        if (!CanSelectDefenseCard(data, defender, i, data.currentAttackElement)) {
-            data.isCardSelectable[i] = false;
+        if (!CanSelectDefenseCard(data, local.localSelectingCards, defender, i, data.currentAttackElement)) {
+            local.isCardSelectable[i] = false;
             continue;
         }
 
         // MP不足の奇跡カード制限
         const Card& card = defender.Hand.GetCards()[i];
         if (!CanUseMiracleCard(defender, card)) {
-            data.isCardSelectable[i] = false;
+            local.isCardSelectable[i] = false;
             continue;
         }
 
         // 選択済みカード制限
-        auto it = std::find(data.selectedDefenseCards.begin(), data.selectedDefenseCards.end(), i);
-        if (it != data.selectedDefenseCards.end()) {
-            data.isCardSelectable[i] = false;
+        auto it = std::find(data.confirmedDefenseCards.begin(), data.confirmedDefenseCards.end(), i);
+        if (it != data.confirmedDefenseCards.end()) {
+            local.isCardSelectable[i] = false;
         }
     }
     // ここで入力待ちとなる
@@ -225,23 +225,23 @@ void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data) {
 // -------------------------------------------------------------
 // 攻撃カード公開演出フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data) {
-    if (data.animationTimer > 0) {
-        data.animationTimer--;
+void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data, LocalClientData& local) {
+    if (local.animationTimer > 0) {
+        local.animationTimer--;
     }
 
-    if (data.revealIndex < data.selectedCards.size()) {
-        data.revealIndex++;
+    if (local.revealIndex < data.confirmedAttackCards.size()) {
+        local.revealIndex++;
         // UI用カウントを同期
-        data.animAttackCardCount = data.revealIndex;
-        data.animationTimer = 30; // 次のカードを開くまでの時間
+        local.animAttackCardCount = local.revealIndex;
+        local.animationTimer = 30; // 次のカードを開くまでの時間
     }
     else {
         Player& attacker = data.Player_Turn[data.currentTurnIdx];
         // 最初に選んだカードを取得
         std::string firstCardName = "";
-        if (!data.selectedCards.empty()) {
-            firstCardName = attacker.Hand.GetCards()[data.selectedCards[0]].GetName();
+        if (!data.confirmedAttackCards.empty()) {
+            firstCardName = attacker.Hand.GetCards()[data.confirmedAttackCards[0]].GetName();
         }
 
         // 換カードの場合、ステータス編集フェーズへ
@@ -261,8 +261,8 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data) {
             // 相手の手札からランダムに1枚選ぶ
             if (!target.Hand.GetCards().empty()) {
                 // ランダムに購入対象を選択
-                data.buyTargetCardIdx = rand() % target.Hand.GetCards().size();
-                data.isBuyingAction = true; // 購入モードON
+                local.buyTargetCardIdx = rand() % target.Hand.GetCards().size();
+                local.isBuyingAction = true; // 購入モードON
                 data.currentPhase = BattlePhase::DefenseSelect; // 承認へ
             }
             else {
@@ -273,7 +273,7 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data) {
 
         // 売カード
         if (firstCardName == "バイバイ") {
-            data.isSellingAction = true; // 売却モードON
+            local.isSellingAction = true; // 売却モードON
             data.currentPhase = BattlePhase::DefenseSelect; // 承認へ
             return;
         }
@@ -281,31 +281,30 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data) {
         // 回復カードが含まれているかチェック
         if (IsHealingAction(data, attacker)) {
             // ターゲットが自分の時はクリックせずにそのまま演出フェーズに
-            if (IsSelfTarget(data)) {
+            if (IsSelfTarget(data,local)) {
                 data.currentPhase = BattlePhase::Effect;
-                data.animationTimer = 0;
+                local.animationTimer = 0;
             }
             // ターゲットを自分以外にした場合はその人が防御側のボタンを押すようにする
             else {
                 data.currentPhase = BattlePhase::DefenseSelect;
-                data.animationTimer = 0;
+                local.animationTimer = 0;
             }
         }
         else {
             data.currentPhase = BattlePhase::TargetDisplay;
-            data.animationTimer = 60;
+            local.animationTimer = 60;
         }
-
     }
 }
 
 // -------------------------------------------------------------
 // ターゲット表示フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessTargetDisplayPhase(BattleData& data) {
+void BattleLogicManager::ProcessTargetDisplayPhase(BattleData& data, LocalClientData& local) {
     // ターゲット表示のウェイト
-    if (data.animationTimer > 0) {
-        data.animationTimer--;
+    if (local.animationTimer > 0) {
+        local.animationTimer--;
     }
     else {
         // 防御カードの選択フェーズへ移行
@@ -316,22 +315,22 @@ void BattleLogicManager::ProcessTargetDisplayPhase(BattleData& data) {
 // -------------------------------------------------------------
 // 防御カード公開演出フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessDefenseRevealPhase(BattleData& data) {
+void BattleLogicManager::ProcessDefenseRevealPhase(BattleData& data, LocalClientData& local) {
     // 防御カードの公開演出
-    if (data.animationTimer > 0) {
-        data.animationTimer--;
+    if (local.animationTimer > 0) {
+        local.animationTimer--;
     }
     else {
-        if (data.revealIndex < (int)data.selectedDefenseCards.size()) {
-            data.revealIndex++;
+        if (local.revealIndex < (int)data.confirmedDefenseCards.size()) {
+            local.revealIndex++;
             // UI用カウントを同期
-            data.animDefenseCardCount = data.revealIndex;
-            data.animationTimer = 30; // 次の防御カードを開くまでの時間
+            local.animDefenseCardCount = local.revealIndex;
+            local.animationTimer = 30; // 次の防御カードを開くまでの時間
         }
         else {
             // 公開完了後、ダメージ計算へ
             data.currentPhase = BattlePhase::Effect;
-            data.animationTimer = 0;
+            local.animationTimer = 0;
         }
     }
 }
@@ -339,7 +338,7 @@ void BattleLogicManager::ProcessDefenseRevealPhase(BattleData& data) {
 // -------------------------------------------------------------
 // ダメージ計算・効果処理フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessEffectPhase(BattleData& data) {
+void BattleLogicManager::ProcessEffectPhase(BattleData& data, LocalClientData& local) {
     // ダメージ計算の実行
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
@@ -351,16 +350,18 @@ void BattleLogicManager::ProcessEffectPhase(BattleData& data) {
 
     // 各種カード効果（奇跡や売買換など）の発動
     if (!data.isPendingAttack) {
-        for (int idx : data.selectedCards) {
+        for (int idx : data.confirmedAttackCards) {
             const Card& card = attacker.Hand.GetCards()[idx];
-            ExecuteCardEffect(data, attacker, target, card);
+            // 【修正】第2引数に local を追加
+            ExecuteCardEffect(data, local, attacker, target, card);
         }
     }
 
     if (target != nullptr) {
-        for (int idx : data.selectedDefenseCards) {
+        for (int idx : data.confirmedDefenseCards) {
             const Card& defCard = target->Hand.GetCards()[idx];
-            ExecuteCardEffect(data, *target, &attacker, defCard);
+            // 【修正】第2引数に local を追加
+            ExecuteCardEffect(data, local, *target, &attacker, defCard);
         }
     }
 
@@ -386,14 +387,15 @@ void BattleLogicManager::ProcessEffectPhase(BattleData& data) {
 
     // 防御データの算出
     TotalDefense defenseData;
-    if (target != nullptr && !data.selectedDefenseCards.empty()) {
+    if (target != nullptr && !data.confirmedDefenseCards.empty()) {
         defenseData = CalculateTotalDefense(data, *target);
         data.defenseTotalPower = defenseData.power; // 防御側UI表示用
     }
 
     // ダメージ適用とカウンター判定
     if (target != nullptr) {
-        ResolveDamage(data, attacker, *target, attackData, defenseData);
+        // 【修正】ダメージ表示演出等で必要なため local を追加
+        ResolveDamage(data, local, attacker, *target, attackData, defenseData);
     }
 
     // カウンターが成立した場合は処理を抜ける
@@ -403,17 +405,17 @@ void BattleLogicManager::ProcessEffectPhase(BattleData& data) {
 
     // 計算が終わったらダメージ演出フェーズへ
     data.currentPhase = BattlePhase::DamageResult;
-    data.animationTimer = 90; // ダメージ表示時間（1.5秒）
-    data.animFrame = 0;       // 演出用フレームをリセット
+    local.animationTimer = 90; // ダメージ表示時間（1.5秒）
+    local.animFrame = 0;       // 演出用フレームをリセット
 }
 
 // -------------------------------------------------------------
 // ダメージ結果表示フェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessDamageResultPhase(BattleData& data) {
+void BattleLogicManager::ProcessDamageResultPhase(BattleData& data, LocalClientData& local) {
     // ダメージ数の表示ウェイト
-    if (data.animationTimer > 0) {
-        data.animationTimer--;
+    if (local.animationTimer > 0) {
+        local.animationTimer--;
     }
     else {
         // 時間が来たら終了処理へ
@@ -424,13 +426,13 @@ void BattleLogicManager::ProcessDamageResultPhase(BattleData& data) {
 // -------------------------------------------------------------
 // ターン終了・クリーンアップフェーズ
 // -------------------------------------------------------------
-void BattleLogicManager::ProcessIdlePhase(BattleData& data) {
+void BattleLogicManager::ProcessIdlePhase(BattleData& data, LocalClientData& local) {
     // 使ったカードの破棄とドロー・次ターンの準備
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
     // 使用された奇跡カードの枚数をカウントする
     int miracleUsageCount = 0;
-    for (int idx : data.selectedCards) {
+    for (int idx : data.confirmedAttackCards) {
         if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
             const Card& card = attacker.Hand.GetCards()[idx];
             if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
@@ -442,9 +444,9 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data) {
     }
 
     // 攻撃側のカード破棄
-    std::sort(data.selectedCards.rbegin(), data.selectedCards.rend());
+    std::sort(data.confirmedAttackCards.rbegin(), data.confirmedAttackCards.rend());
     int removedCount = 0;
-    for (int idx : data.selectedCards) {
+    for (int idx : data.confirmedAttackCards) {
         const Card& card = attacker.Hand.GetCards()[idx];
         // 奇跡(Magic)以外なら破棄
         if (card.GetCategory() != CardCategory::Magic) {
@@ -466,7 +468,7 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data) {
 
         // 防御側も同様に奇跡使用枚数をカウント
         int defMiracleCount = 0;
-        for (int idx : data.selectedDefenseCards) {
+        for (int idx : data.confirmedDefenseCards) {
             if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
                 const Card& card = target.Hand.GetCards()[idx];
                 if (card.GetCategory() == CardCategory::Magic) {
@@ -478,9 +480,9 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data) {
         }
 
         // 防御側のカード破棄
-        std::sort(data.selectedDefenseCards.rbegin(), data.selectedDefenseCards.rend());
+        std::sort(data.confirmedDefenseCards.rbegin(), data.confirmedDefenseCards.rend());
         int defRemovedCount = 0;
-        for (int idx : data.selectedDefenseCards) {
+        for (int idx : data.confirmedDefenseCards) {
             const Card& card = target.Hand.GetCards()[idx];
             if (card.GetCategory() != CardCategory::Magic) {
                 target.Hand.Remove(idx);
@@ -499,24 +501,25 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data) {
 
         // 死亡判定
         if (target.Status.dead) {
+            // 【修正】UI上のステータスリセット等のために local を追加想定
             RemovePlayer(data, data.targetIdx);
         }
     }
 
-    NextTurn(data);
+    NextTurn(data, local);
 }
 
-void BattleLogicManager::ProcessChangeStatusEditPhase(BattleData& data) {
+void BattleLogicManager::ProcessChangeStatusEditPhase(BattleData& data, LocalClientData& local) {
     // UI側で増減を行い、決定ボタン（ATTACKなど）が押されたら次へ
-    if (data.selectedOption == BattleOption::ATTACK) {
-        data.selectedOption = BattleOption::NONE;
+    if (local.selectedOption == BattleOption::ATTACK) {
+        local.selectedOption = BattleOption::NONE;
         data.currentPhase = BattlePhase::Effect; // 効果適用へ
     }
 }
 
-void BattleLogicManager::ProcessBuyConfirmPhase(BattleData& data) {
+void BattleLogicManager::ProcessBuyConfirmPhase(BattleData& data, LocalClientData& local) {
     // UI側の「買う」「買わない」入力待ち
-    if (data.selectedOption == BattleOption::BUY_YES || data.selectedOption == BattleOption::BUY_NO) {
+    if (local.selectedOption == BattleOption::BUY_YES || local.selectedOption == BattleOption::BUY_NO) {
         data.currentPhase = BattlePhase::Effect;
         // 実際の売買ロジックは ExecuteCardEffect 内で行う
     }
@@ -530,7 +533,7 @@ bool BattleLogicManager::CanUseMiracleCard(const Player& player, const Card& car
 
 // 判定用のヘルパー関数
 bool BattleLogicManager::IsHealingAction(const BattleData& data, const Player& attacker) {
-    for (int idx : data.selectedCards) {
+    for (int idx : data.confirmedAttackCards) {
         if (idx < 0 || idx >= (int)attacker.Hand.GetCards().size()) continue;
         CardCategory cat = attacker.Hand.GetCards()[idx].GetCategory();
         if (cat == CardCategory::Healing || cat == CardCategory::MagicHealing) {
@@ -540,33 +543,33 @@ bool BattleLogicManager::IsHealingAction(const BattleData& data, const Player& a
     return false;
 }
 
-bool BattleLogicManager::IsSelfTarget(const BattleData& data) {
+bool BattleLogicManager::IsSelfTarget(const BattleData& data, const LocalClientData& local) {
     // ターゲットが自分自身のID、または「未選択(-1)」の場合は自分と判定する
     return data.targetIdx == data.currentTurnIdx || data.targetIdx == -1;
 }
 
-void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, Player* target, const Card& card) {
+void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& local, Player& attacker, Player* target, const Card& card) {
     std::string name = card.GetName();
 
     // 換・買・売カードの処理
     if (name == "イコールイコール") {
         // MPと金額を増減させ、その合計値をHPから引く（マイナスなら回復する）
-        attacker.setMp(attacker.getMp() + data.changeMP);
-        attacker.setMoney(attacker.getMoney() + data.changeMoney);
-        int hpCost = data.changeMP + data.changeMoney;
+        attacker.setMp(attacker.getMp() + local.changeMP);
+        attacker.setMoney(attacker.getMoney() + local.changeMoney);
+        int hpCost = local.changeMP + local.changeMoney;
         attacker.setHp(attacker.getHp() - hpCost);
 
         // ポップアップ登録 (自身へのダメージ/回復)
         if (hpCost > 0) {
-            data.popups.push_back({ PopupType::Damage, data.currentTurnIdx, std::to_string(hpCost), 0xFF0000, 0, 60 });
+            local.popups.push_back({ PopupType::Damage, data.currentTurnIdx, std::to_string(hpCost), 0xFF0000, 0, 60 });
         }
         else if (hpCost < 0) {
-            data.popups.push_back({ PopupType::Heal, data.currentTurnIdx, std::to_string(-hpCost), 0x00FF00, 0, 60 });
+            local.popups.push_back({ PopupType::Heal, data.currentTurnIdx, std::to_string(-hpCost), 0x00FF00, 0, 60 });
         }
     }
     else if (name == "チョイスチョイス") {
-        if (data.selectedOption == BattleOption::BUY_YES && target != nullptr && data.buyTargetCardIdx != -1) {
-            const Card& buyCard = target->Hand.GetCards()[data.buyTargetCardIdx];
+        if (local.selectedOption == BattleOption::BUY_YES && target != nullptr && local.buyTargetCardIdx != -1) {
+            const Card& buyCard = target->Hand.GetCards()[local.buyTargetCardIdx];
             int price = buyCard.GetMoney(); // 価格取得
 
             // お金のやり取り（PlayerクラスにsetMoney等のメソッドがある前提）
@@ -575,15 +578,15 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
 
             // カードの移動
             attacker.Hand.Add(buyCard);
-            target->Hand.Remove(data.buyTargetCardIdx);
+            target->Hand.Remove(local.buyTargetCardIdx);
 
             // 買ったので、次のカード破棄処理で不具合が出ないようインデックスをリセット
-            data.buyTargetCardIdx = -1;
+            local.buyTargetCardIdx = -1;
         }
     }
-    else if (name == "バイバイ" && target != nullptr && data.selectedCards.size() >= 2) {
+    else if (name == "バイバイ" && target != nullptr && data.confirmedAttackCards.size() >= 2) {
         // 選ばれた2枚目のカード（売りつけるアイテム）を取得
-        int sellItemIdx = data.selectedCards[1];
+        int sellItemIdx = data.confirmedAttackCards[1];
         const Card& sellCard = attacker.Hand.GetCards()[sellItemIdx];
 
         int price = sellCard.GetMoney();
@@ -616,7 +619,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
         }
 
         // 売却額のポップアップ
-        data.popups.push_back({ PopupType::Money, data.currentTurnIdx, "+￥" + std::to_string(price), 0xFFFF00, 0, 60 });
+        local.popups.push_back({ PopupType::Money, data.currentTurnIdx, "+￥" + std::to_string(price), 0xFFFF00, 0, 60 });
     }
 
     // カテゴリで大きく分岐
@@ -629,7 +632,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
             data.resultTargetIdx = data.targetIdx;
 
             // 回復ポップアップ
-            data.popups.push_back({ PopupType::Heal, data.targetIdx, std::to_string(card.GetPower()), 0x00FF00, 0, 60 });
+            local.popups.push_back({ PopupType::Heal, data.targetIdx, std::to_string(card.GetPower()), 0x00FF00, 0, 60 });
         }
     }
     // MP回復カードの処理
@@ -643,7 +646,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, Player& attacker, P
             data.resultTargetIdx = data.targetIdx;
 
             // MP回復ポップアップ
-            data.popups.push_back({ PopupType::MagicHeal, data.targetIdx, std::to_string(card.GetPower()), 0x0000FF, 0, 60 });
+            local.popups.push_back({ PopupType::MagicHeal, data.targetIdx, std::to_string(card.GetPower()), 0x0000FF, 0, 60 });
         }
     }
     else if (card.GetCategory() == CardCategory::Magic) {
@@ -768,16 +771,22 @@ std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selec
     return result;
 }
 
-void BattleLogicManager::UpdateCardAnimation(BattleData& data) {
+void BattleLogicManager::UpdateCardAnimation(BattleData& data, LocalClientData& local) {
     float targetYOffset = 65.0f;
     size_t count = 0;
 
-    // 現在のフェーズによってカウント対象を分岐
-    if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::AttackReveal) {
-        count = data.selectedCards.size();
+    // 現在のフェーズによってカウント対象を分岐（選択中はlocal、公開・演出中はdataを参照）
+    if (data.currentPhase == BattlePhase::Select) {
+        count = local.localSelectingCards.size();
     }
-    else if (data.currentPhase == BattlePhase::DefenseSelect || data.currentPhase == BattlePhase::DefenseReveal) {
-        count = data.selectedDefenseCards.size();
+    else if (data.currentPhase == BattlePhase::AttackReveal) {
+        count = data.confirmedAttackCards.size();
+    }
+    else if (data.currentPhase == BattlePhase::DefenseSelect) {
+        count = local.localSelectingCards.size(); // 防御側も選択中はローカルの配列を参照
+    }
+    else if (data.currentPhase == BattlePhase::DefenseReveal) {
+        count = data.confirmedDefenseCards.size();
     }
 
     // アニメーション計算
@@ -785,29 +794,32 @@ void BattleLogicManager::UpdateCardAnimation(BattleData& data) {
         if (count >= 4) {
             targetYOffset = 30.0f;
         }
-        data.currentYOffset += (targetYOffset - data.currentYOffset) * 0.1f;
+        local.currentYOffset += (targetYOffset - local.currentYOffset) * 0.1f;
     }
     else {
-        data.currentYOffset = 65.0f;
+        local.currentYOffset = 65.0f;
     }
 }
 
-void BattleLogicManager::NextTurn(BattleData& data) {
+void BattleLogicManager::NextTurn(BattleData& data, LocalClientData& local) {
     if (data.Player_Turn.empty()) return;
 
     // 次のプレイヤーへ
     data.currentTurnIdx = (data.currentTurnIdx + 1) % data.Player_Turn.size();
 
     // 前のターンの選択情報、および【UI用確定リザルト】を完全にリセット
-    data.selectedCards.clear();
-    data.selectedDefenseCards.clear();
+    data.confirmedAttackCards.clear();
+    data.confirmedDefenseCards.clear();
     data.attackTotalPower = 0;
     data.defenseTotalPower = 0;
     data.playerTarget = false;
     data.targetIdx = -1;
-    data.revealIndex = 0;
-    data.animAttackCardCount = 0;
-    data.animDefenseCardCount = 0;
+
+    // UI側のリセット
+    local.localSelectingCards.clear();
+    local.revealIndex = 0;
+    local.animAttackCardCount = 0;
+    local.animDefenseCardCount = 0;
 
     // 属性や特殊効果フラグ、倍率などを完全に初期化
     data.currentAttackElement = "無";
@@ -840,21 +852,22 @@ void BattleLogicManager::RemovePlayer(BattleData& data, int targetIdx) {
     }
 }
 
-TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& attacker) {
+TotalAttack BattleLogicManager::CalculateTotalAttack(const BattleData& data, Player& attacker) {
     TotalAttack total;
     auto& hand = attacker.Hand.GetCards();
 
-    if (data.selectedCards.empty()) {
+    // 確定した攻撃カード配列を使用
+    if (data.confirmedAttackCards.empty()) {
         total.type = "無";
         return total;
     }
-    if (data.selectedCards[0] < 0 || data.selectedCards[0] >= (int)hand.size()) return total;
+    if (data.confirmedAttackCards[0] < 0 || data.confirmedAttackCards[0] >= (int)hand.size()) return total;
 
     // 特殊カード時に属性を偽装する
-    const std::string& firstCardName = hand[data.selectedCards[0]].GetName();
+    const std::string& firstCardName = hand[data.confirmedAttackCards[0]].GetName();
     if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
-        if (data.selectedCards.size() >= 2) {
-            total.type = hand[data.selectedCards[1]].GetType(); // 2枚目に合わせる
+        if (data.confirmedAttackCards.size() >= 2) {
+            total.type = hand[data.confirmedAttackCards[1]].GetType(); // 2枚目に合わせる
         }
         else {
             total.type = "無";
@@ -865,10 +878,10 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
     }
 
     // 新しい共通関数で属性を一発取得
-    total.type = GetCombinedElement(data.selectedCards, hand);
+    total.type = GetCombinedElement(data.confirmedAttackCards, hand);
 
-    for (size_t i = 0; i < data.selectedCards.size(); i++) {
-        int index = data.selectedCards[i];
+    for (size_t i = 0; i < data.confirmedAttackCards.size(); i++) {
+        int index = data.confirmedAttackCards[i];
         if (index < 0 || index >= (int)hand.size()) continue;
 
         const Card& card = hand[index];
@@ -890,7 +903,7 @@ TotalAttack BattleLogicManager::CalculateTotalAttack(BattleData& data, Player& a
     return total;
 }
 
-void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Player& target,
+void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local, Player& attacker, Player& target,
     const TotalAttack& attack, const TotalDefense& defense) {
     // --- UIと同期するために属性をセット ---
     data.currentAttackElement = attack.type;
@@ -907,7 +920,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
     // 弾かれた（保留された）攻撃であれば無条件で魔法扱いにする
     bool hasMagicAttack = data.isPendingAttack;
     if (!hasMagicAttack) {
-        for (int idx : data.selectedCards) {
+        for (int idx : data.confirmedAttackCards) {
             if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
                 hasMagicAttack = true;
                 break;
@@ -917,7 +930,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 「山」の条件成立時
     if (data.isParry && hasMagicAttack) {
-        data.popups.push_back({ PopupType::Parry, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
+        local.popups.push_back({ PopupType::Parry, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
 
         // カウンター攻撃として、受けるはずだったダメージと属性を「保留」にする
         data.isPendingAttack = true;
@@ -936,11 +949,12 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
         data.targetIdx = tempIdx;            // 元アタッカーが新たな「ディフェンダー」に
 
         // カード選択状態を初期化して、次のキャッチボールに備える
-        data.selectedCards.clear();
-        data.selectedDefenseCards.clear();
-        data.revealIndex = 0;
-        data.animAttackCardCount = 0;
-        data.animDefenseCardCount = 0;
+        data.confirmedAttackCards.clear();
+        data.confirmedDefenseCards.clear();
+        local.localSelectingCards.clear();
+        local.revealIndex = 0;
+        local.animAttackCardCount = 0;
+        local.animDefenseCardCount = 0;
 
         // 一時フラグのリセット（次のカウンター連鎖で再判定するため）
         data.isImmune = false;
@@ -964,7 +978,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
 
     // 無属性攻撃を無効化
     if (data.isImmune && attack.type == "無") {
-        data.popups.push_back({ PopupType::NoHit, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
+        local.popups.push_back({ PopupType::NoHit, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
         return;
     }
 
@@ -985,24 +999,24 @@ void BattleLogicManager::ResolveDamage(BattleData& data, Player& attacker, Playe
             target.setHp(0);
             target.Status.dead = true;
         }
-        data.popups.emplace_back(PopupType::Damage, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+        local.popups.emplace_back(PopupType::Damage, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
 
         // スティール（HP吸収処理）
         if (data.isDrain && finalDamage > 0) {
             attacker.setHp(attacker.getHp() + finalDamage);
-            data.popups.emplace_back(PopupType::Heal, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+            local.popups.emplace_back(PopupType::Heal, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
         }
     }
 }
 
-void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::vector<Card>& hand) {
-    if (!data.selectedCards.empty()) {
-        int firstIdx = data.selectedCards[0];
+void BattleLogicManager::RecalculateAttackElement(BattleData& data, LocalClientData& local, const std::vector<Card>& hand) {
+    if (!local.localSelectingCards.empty()) {
+        int firstIdx = local.localSelectingCards[0];
         if (firstIdx >= 0 && firstIdx < (int)hand.size()) {
             const std::string& firstName = hand[firstIdx].GetName();
             if (firstName == "バイバイ" || firstName == "チョイスチョイス" || firstName == "イコールイコール") {
-                if (data.selectedCards.size() >= 2) {
-                    data.currentAttackElement = hand[data.selectedCards[1]].GetType();
+                if (local.localSelectingCards.size() >= 2) {
+                    data.currentAttackElement = hand[local.localSelectingCards[1]].GetType();
                 }
                 else {
                     data.currentAttackElement = "無";
@@ -1012,23 +1026,23 @@ void BattleLogicManager::RecalculateAttackElement(BattleData& data, const std::v
         }
     }
     // 共通関数を使って簡略化
-    data.currentAttackElement = GetCombinedElement(data.selectedCards, hand);
+    data.currentAttackElement = GetCombinedElement(local.localSelectingCards, hand);
 }
 
-TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player& defender) {
+TotalDefense BattleLogicManager::CalculateTotalDefense(const BattleData& data, Player& defender) {
     TotalDefense total;
     total.power = 0;
     total.isActive = false; // 初期化漏れ対策
 
     auto& hand = defender.Hand.GetCards();
 
-    if (data.selectedDefenseCards.empty()) {
+    if (data.confirmedDefenseCards.empty()) {
         total.type = _T("無");
         return total;
     }
 
     // 選んだカードが手札の範囲外なら強制リターン
-    if (data.selectedDefenseCards[0] < 0 || data.selectedDefenseCards[0] >= (int)hand.size()) {
+    if (data.confirmedDefenseCards[0] < 0 || data.confirmedDefenseCards[0] >= (int)hand.size()) {
         total.type = _T("無");
         return total;
     }
@@ -1036,10 +1050,10 @@ TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player&
     total.isActive = true;
 
     // 共通関数で属性を取得
-    total.type = GetCombinedElement(data.selectedDefenseCards, hand);
+    total.type = GetCombinedElement(data.confirmedDefenseCards, hand);
 
-    for (size_t i = 0; i < data.selectedDefenseCards.size(); ++i) {
-        int index = data.selectedDefenseCards[i];
+    for (size_t i = 0; i < data.confirmedDefenseCards.size(); ++i) {
+        int index = data.confirmedDefenseCards[i];
         if (index < 0 || index >= (int)hand.size()) continue;
 
         // 防御力を加算
@@ -1048,9 +1062,9 @@ TotalDefense BattleLogicManager::CalculateTotalDefense(BattleData& data, Player&
     return total;
 }
 
-void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::vector<Card>& hand) {
+void BattleLogicManager::RecalculateDefenseElement(BattleData& data, LocalClientData& local, const std::vector<Card>& hand) {
     // 防御カードの選択可否フラグを全リセット
-    std::fill(data.isCardSelectable.begin(), data.isCardSelectable.end(), false);
+    std::fill(local.isCardSelectable.begin(), local.isCardSelectable.end(), false);
 
     // 現在の「相手の攻撃属性」を取得
     std::string attackElem = data.currentAttackElement;
@@ -1062,15 +1076,15 @@ void BattleLogicManager::RecalculateDefenseElement(BattleData& data, const std::
         // 【防御ロジックの核】
         // IsValidGuard に判定を統一
         if (DamageResolver::IsValidGuard(attackElem, defenseElem)) {
-            data.isCardSelectable[i] = true;
+            local.isCardSelectable[i] = true;
         }
     }
 }
 
 // 防御カードの選択可否を判定（UI入力制限用）
-bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const Player& defender, int cardIdx, const std::string& incomingAttackElement) {
+bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const std::vector<int>& currentSelectedCards, 
+    const Player& defender, int cardIdx, const std::string& incomingAttackElement) {
     // 回復アクション中の場合、防御カード選択をブロックする
-    // 攻撃者(ターンプレイヤー)のカードを確認する必要がある
     const Player& attacker = data.Player_Turn[data.currentTurnIdx];
     if (IsHealingAction(data, attacker)) {
         return false;
@@ -1079,8 +1093,8 @@ bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const Play
     auto& hand = defender.Hand.GetCards();
     if (cardIdx < 0 || cardIdx >= (int)hand.size()) return false;
 
-    // 現在選択されている防御カードに、試しにクリックしたカードを追加してみる
-    std::vector<int> tempSelected = data.selectedDefenseCards;
+    // UIやAIから渡された「現在選択中のカードリスト」に、試しにカードを追加してみる
+    std::vector<int> tempSelected = currentSelectedCards;
     tempSelected.push_back(cardIdx);
 
     // その状態での属性を計算

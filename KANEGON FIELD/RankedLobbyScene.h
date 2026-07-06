@@ -8,6 +8,8 @@ protected:
     virtual void DrawSpecificUI() const override;
 
 public:
+    virtual std::vector<Player> GetBattlePlayers() const override;
+
     RankedLobbyScene();
     virtual SceneName Update(const InputManager& input) override;
 };

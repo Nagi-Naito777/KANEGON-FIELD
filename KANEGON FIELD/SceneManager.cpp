@@ -56,12 +56,10 @@ void SceneManager::Update(const InputManager& input) {
     // 要望されたシーンが現在のシーンと異なる場合、シーンを切り替える
     if (nextName != m_currentName && nextName != SceneName::NONE) {
 
+        printfDx("DEBUG: Transition requested: %d -> %d\n", (int)m_currentName, (int)nextName);
+
         // 切り替え時にデータを一時保持するための変数
         std::vector<Player> carryOverPlayers;
-        if (m_currentName == SceneName::SETTING && nextName == SceneName::BATTLE) {
-            auto* lobbyScene = dynamic_cast<BaseLobbyScene*>(m_currentScene.get());
-            if (lobbyScene) carryOverPlayers = lobbyScene->GetBattlePlayers();
-        }
 
         // 設定画面からバトル画面へ移動するとき、プレイヤー情報を抜き出す
         if (m_currentName == SceneName::SETTING && nextName == SceneName::BATTLE) {
@@ -69,7 +67,11 @@ void SceneManager::Update(const InputManager& input) {
             auto* lobbyScene = dynamic_cast<BaseLobbyScene*>(m_currentScene.get());
             if (lobbyScene) {
                 // 子クラスが修行だろうが乱闘だろうが、親の機能を使ってデータを取り出せる
-                carryOverPlayers = lobbyScene->GetBattlePlayers();
+                carryOverPlayers = lobbyScene->GetBattlePlayers(); 
+                printfDx("DEBUG: Extracted players count: %d\n", (int)carryOverPlayers.size());
+            }
+            else {
+                printfDx("DEBUG: Failed to cast to BaseLobbyScene!\n");
             }
         }
 

@@ -52,7 +52,7 @@ public:
     void Draw() const override;
 
     // 外部へプレイヤーリストを渡す関数
-    const std::vector<Player>& GetBattlePlayers() const { return BattlePlayer; }
+    virtual std::vector<Player> GetBattlePlayers() const = 0;
 
     // Updateは子クラスに強制実装させる
     virtual SceneName Update(const InputManager& input) = 0;

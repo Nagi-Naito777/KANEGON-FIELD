@@ -4,6 +4,21 @@
 
 extern Player g_player;
 
+// プレイヤーリストを生成して返す関数
+std::vector<Player> RankedLobbyScene::GetBattlePlayers() const {
+    std::vector<Player> players;
+
+    // 自分を追加
+    Player user;
+    user.setName(g_player.getName());
+    user.setControllerType(ControllerType::HUMAN);
+    players.push_back(user);
+
+    // 必要であれば対戦相手（AIなど）を追加する処理をここに書けます
+
+    return players;
+}
+
 RankedLobbyScene::RankedLobbyScene()
     : BaseLobbyScene(SelectScene::Option::TAIMAN) // TAIMANモードとして初期化
 {
@@ -24,14 +39,7 @@ SceneName RankedLobbyScene::Update(const InputManager& input) {
     if (input.IsLeftClicked()) {
         if (isHoverIdx[RETURN]) return SceneName::SELECT;
         if (isHoverIdx[BATTLE_START]) {
-            // 真剣勝負のプレイヤー設定（自分のみ追加など）
-            BattlePlayer.clear();
-            Player user;
-            user.setName(g_player.getName());
-            user.setControllerType(ControllerType::HUMAN);
-            BattlePlayer.push_back(user);
-
-            return SceneName::BATTLE;
+            return SceneName::BATTLE; // 遷移を返すだけでOK
         }
     }
     return SceneName::SETTING;

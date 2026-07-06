@@ -17,13 +17,13 @@ unsigned int BattleUIManager::GetElementColor(const std::string& elementType) co
     return Col.GetBla(); // デフォルト色
 }
 
-void BattleUIManager::Draw(const BattleData& data) const {
+void BattleUIManager::Draw(const BattleData& data, const LocalClientData& local) const {
     // プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
     if (data.Player_Turn.empty()) {
         return;
     }
 
-    //　背景画像の描画
+    // 背景画像の描画
     DrawGraph(START_X, START_Y, Pic.GetBat(), TRUE);
 
     // 上下のラインを描画
@@ -32,18 +32,18 @@ void BattleUIManager::Draw(const BattleData& data) const {
 
     // バトル終了フェーズの場合は、リザルト画面を描画して以降の処理をスキップ
     if (data.currentPhase == BattlePhase::End) {
-        DrawEndScreen(data);
+        DrawEndScreen(data, local);
         return;
     }
 
     // 戻るボタンの描画
-    unsigned int color = data.isHoverIdx[BattleOption::RETURN] ? Col.GetCurYel() : Col.GetWhi();
+    unsigned int color = local.isHoverIdx[BattleOption::RETURN] ? Col.GetCurYel() : Col.GetWhi();
     DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, color, TRUE);
     DrawBox(RET_BUT_X, RET_BUT_Y, RET_BUT_END_X, RET_BUT_END_Y, Col.GetBla(), FALSE);
     DrawString(37, 17, _T("戻る"), Col.GetBla());
 
     // プレイヤー一覧（ステータス）を描画
-    DrawPlayerStatus(data, data.isHoverPlayerIdx);
+    DrawPlayerStatus(data, local);
 
     // ターンプレイヤー名とターゲット名
     const Player& attacker = data.Player_Turn[data.currentTurnIdx];
@@ -65,25 +65,25 @@ void BattleUIManager::Draw(const BattleData& data) const {
         DrawFormatStringToHandle(355, 100, counterEleCol, Font.GetSmall(), _T("【反射待機】威力: %d"), data.pendingAttackPower);
     }
 
-    // 攻撃カードの描画 (セレクト開始?ダメージ計算完了までずっと表示)
+    // 攻撃カードの描画 (セレクト開始～ダメージ計算完了までずっと表示)
     if (data.currentPhase == BattlePhase::Select ||
         data.currentPhase == BattlePhase::DefenseSelect ||
         data.currentPhase == BattlePhase::Effect ||
         data.currentPhase == BattlePhase::DamageResult) {
 
         // 攻撃側プレイヤーの手札データを渡す
-        DrawSelectedCard(data, attacker, data.currentYOffset);
+        DrawSelectedCard(data, attacker, local);
     }
 
-    // 防御カードの描画 (防衛セレクト開始?ダメージ計算完了までずっと表示)
+    // 防御カードの描画 (防衛セレクト開始～ダメージ計算完了までずっと表示)
     if (data.currentPhase == BattlePhase::DefenseSelect ||
         data.currentPhase == BattlePhase::Effect ||
         data.currentPhase == BattlePhase::DamageResult) {
 
-        if (data.targetIdx >= 0 && data.targetIdx < data.Player_Turn.size()) {
+        if (data.targetIdx >= 0 && data.targetIdx < (int)data.Player_Turn.size()) {
             const Player& defender = data.Player_Turn[data.targetIdx];
             // 防衛側プレイヤーの手札データを渡す
-            DrawDefenseCards(data, defender, data.targetIdx, data.currentYOffset);
+            DrawDefenseCards(data, defender, local);
         }
     }
 
@@ -100,36 +100,36 @@ void BattleUIManager::Draw(const BattleData& data) const {
 
     if (humanPlayer) {
         // 手札の描画
-        DrawPlayerHand(data, *humanPlayer, data.hoveredCardIdx, data.isHoverCardIdx);
+        DrawPlayerHand(data, *humanPlayer, local);
 
         // 決定ボタンの描画 (自分が操作すべきフェーズの時だけ表示)
         if (data.currentPhase == BattlePhase::Select && humanIdx == data.currentTurnIdx) {
-            DrawCardSelectButton(data.isHoverIdx); // 攻撃決定
+            DrawCardSelectButton(local); // 攻撃決定
         }
         if (data.currentPhase == BattlePhase::DefenseSelect && humanIdx == data.targetIdx) {
-            DrawCardSelectButton(data.isHoverIdx); // 防御決定
+            DrawCardSelectButton(local); // 防御決定
         }
     }
 
     // ダメージ・回復のポップアップ描画
-    DrawPopups(data);
+    DrawPopups(data, local);
 
     // 換・買フェーズのウィンドウ描画
     if (data.currentPhase == BattlePhase::ChangeStatusEdit) {
-        DrawChangeStatusWindow(data);
+        DrawChangeStatusWindow(data, local);
     }
     if (data.currentPhase == BattlePhase::BuyConfirm) {
-        DrawBuyConfirmWindow(data);
+        DrawBuyConfirmWindow(data, local);
     }
 
     // 降参確認ウィンドウ
-    if (data.isSurrenderConfirm) {
-        DrawSurrenderWindow(data);
+    if (local.isSurrenderConfirm) {
+        DrawSurrenderWindow(local);
     }
 }
 
 // プレイヤーステータスの描画
-void BattleUIManager::DrawPlayerStatus(const BattleData& data, const bool* isHoverPlayerIdx) const {
+void BattleUIManager::DrawPlayerStatus(const BattleData& data, const LocalClientData& local) const {
     const int startX = 700;         // X開始点
     const int startY = 75;          // 1人目のY開始点
     const int marginY = 40;         // プレイヤーごとのUIの間隔
@@ -139,10 +139,10 @@ void BattleUIManager::DrawPlayerStatus(const BattleData& data, const bool* isHov
 
         // --- ホバー中またはターゲット選択中なら色を変える ---
         unsigned int bgColor = GetColor(255, 255, 255); // 基本は白
-        if (isHoverPlayerIdx[i]) {
+        if (local.isHoverPlayerIdx[i]) {
             bgColor = Col.GetCurYel();  // 薄黄色
         }
-        if (data.playerTarget && data.targetIdx == i) {
+        if (data.playerTarget && data.targetIdx == (int)i) {
             bgColor = Col.GetRed(); // 選択済みのターゲットは赤色
         }
 
@@ -179,13 +179,9 @@ void BattleUIManager::DrawPlayerStatus(const BattleData& data, const bool* isHov
 }
 
 // 手札の描画
-void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& player,
-    int hoveredCardIdx, const bool* isHoverCardIdx) const {
+void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& player, const LocalClientData& local) const {
     // 手札を取得
     const auto& hand = player.Hand.GetCards();
-
-    // デバッグ：画面左上に手札枚数を表示
-    // DrawFormatString(0, 100, GetColor(0, 0, 0), "HandSize: %d", hand.size());
 
     // --- サイズ・レイアウト設定 ---
     const float SCALE = 1.45f;                  // 拡大倍率
@@ -195,19 +191,18 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
     const int CARD_H = (int)(BASE_H * SCALE);   // 拡大後の高さ (100)
 
     const int Start_X = 10;                     // 1枚目のX座標
-    const int Start_Y = 450;                    // 手札を表示するY座標（サイズアップに合わせて少し上に調整）
-    const int MARGIN = 2;                       // カード同士の隙間（2倍に調整）
+    const int Start_Y = 450;                    // 手札を表示するY座標
+    const int MARGIN = 2;                       // カード同士の隙間
 
     // 改行用の変数
     const int MAX_CARDS_PER_ROW = 9;            // 1段の枚数
     const int ROW_SPACING = CARD_H + 30;        // 段ごとの縦の間隔
 
     // 攻撃ターンかどうか判定
-    bool isAttackTurn = (player.getName() ==
-        data.Player_Turn[data.currentTurnIdx].getName());
+    bool isAttackTurn = (player.getName() == data.Player_Turn[data.currentTurnIdx].getName());
 
     // カード本体の描画ループ
-    for (int i = 0; i < hand.size(); i++) {
+    for (int i = 0; i < (int)hand.size(); i++) {
         int col = i % MAX_CARDS_PER_ROW;
         int row = i / MAX_CARDS_PER_ROW;
 
@@ -219,18 +214,16 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 
         if (picIdx >= 0 && picIdx < CARD_KIND) {
             // もしマウスカーソルが重なった時は若干白くさせる
-            if (isHoverCardIdx[i]) {
-                // ブレンドモードを「加算」に設定（0?255で白さの強さを調節）
+            if (local.isHoverCardIdx[i]) {
+                // ブレンドモードを「加算」に設定
                 SetDrawBlendMode(DX_BLENDMODE_ADD, 255);
             }
-            // DrawExtendGraph(左上X, 左上Y, 右下X, 右下Y, グラフィックハンドル, 透過フラグ)
             DrawExtendGraph(x, y, x + CARD_W, y + CARD_H, Pic.GetCard(picIdx), TRUE);
 
             // 描き終わったら必ず「ノーブレンド」に戻す
             SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
         }
         else {
-            // エラー時の赤い箱も拡大サイズに合わせる
             DrawBox(x, y, x + CARD_W, y + CARD_H, Col.GetRed(), TRUE);
             printfDx(_T("Error: CardIndex %d out of range!\n"), picIdx);
         }
@@ -254,12 +247,11 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             show_box = true;
             break;
         case Bilingual:
-            // 自分が攻撃ターンで、かつ攻撃フェーズの時だけ「攻」にする
             if (data.currentPhase == BattlePhase::Select && isAttackTurn) {
                 _stprintf_s(buf, _T("攻%d"), hand[i].GetPower());
             }
             else {
-                _stprintf_s(buf,  _T("守%d"), hand[i].GetPower());
+                _stprintf_s(buf, _T("守%d"), hand[i].GetPower());
             }
             show_box = true;
             break;
@@ -277,9 +269,10 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             _stprintf_s(buf, _T("%d%%攻%d"), hand[i].GetPercent(), hand[i].GetPower());
             show_box = true;
             break;
-        case Buy:break;
-        case Sell:break;
-        case Change:break;
+        case Buy:
+        case Sell:
+        case Change:
+            break;
         }
 
         // 手札カードの下の数値描画処理
@@ -289,10 +282,10 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
             DrawString(x + (CARD_W - w) / 2, textAreaY + 4, buf, Ele_Col);
         }
 
-        // --- 選択可能かどうかの判定をロジック（BattleData）から取得 ---
+        // --- 選択可能かどうかの判定をローカルデータから取得 ---
         bool isSelectable = false;
-        if (i < data.isCardSelectable.size()) {
-            isSelectable = data.isCardSelectable[i];
+        if (i < (int)local.isCardSelectable.size()) {
+            isSelectable = local.isCardSelectable[i];
         }
 
         // --- UIは判定せず、フラグに従って暗転させるだけ ---
@@ -304,10 +297,8 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
     }
 
     // マウスカーソルが重なった際に説明文を表示する処理
-    if (hoveredCardIdx != -1 && hoveredCardIdx < hand.size()) {
-        const auto& card = hand[hoveredCardIdx];
-
-        // 選択してるカードの座標を再計算
+    if (local.hoveredCardIdx != -1 && local.hoveredCardIdx < (int)hand.size()) {
+        const auto& card = hand[local.hoveredCardIdx];
 
         // レイアウト定数
         const int BOX_X1 = 685; // 説明ボックスのX開始点
@@ -318,7 +309,7 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 
         // 背景ボックスの描画
         DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetBoxYel(), TRUE);      // 背景
-        DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetBla(), FALSE);           // 枠線
+        DrawBox(BOX_X1, BOX_Y1, BOX_X2, BOX_Y2, Col.GetBla(), FALSE);        // 枠線
 
         // カード画像の描画変数
         const float img_s = 1.5f;               // 画像拡大率
@@ -336,9 +327,9 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
         // カード名テキスト
         int card_txt_x = 710;
         int card_txt_y = 460;
-        
+
         // カードの属性で色を変更する変数
-        unsigned int namecolor= GetElementColor(card.GetType());
+        unsigned int namecolor = GetElementColor(card.GetType());
 
         DrawFormatString(card_txt_x, card_txt_y, namecolor, _T("[%s]"), card.GetName().c_str());
 
@@ -374,11 +365,20 @@ void BattleUIManager::DrawPlayerHand(const BattleData& data, const Player& playe
 }
 
 // 選択されたカードを描画する関数
-void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& player,
-    float currentYOffset)const {
+void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& player, const LocalClientData& local) const {
+    // 描画対象のカードリストを状況によって切り替える
+    // 攻撃選択中であり、かつ自分のターンの場合は「ローカルで選択中のカード」を表示する
+    std::vector<int> targetCards;
+    if (data.currentPhase == BattlePhase::Select && local.myPlayerIndex == data.currentTurnIdx) {
+        targetCards = local.localSelectingCards;
+    }
+    else {
+        // それ以外のフェーズ（演出中など）は「確定済みのカード」を表示する
+        targetCards = data.confirmedAttackCards;
+    }
 
-    // まだカードが選ばれていない、または手札の範囲外なら何もしない
-    if (data.selectedCards.empty())return;
+    // まだカードが選ばれていない場合は何もしない
+    if (targetCards.empty()) return;
 
     const auto& hand = player.Hand.GetCards();  // 手札参照
 
@@ -393,30 +393,21 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
 
     // UIボックスの固定サイズ
     const int boxWidth = 250;
-
-    const int limitY = 390; // 手札UI（450）の手前で止める制限ライン
+    const int limitY = 390; // 手札UIの手前で止める制限ライン
 
     // 動的なYオフセット計算
-    int count = (int)data.selectedCards.size();
+    int count = (int)targetCards.size();
     // カード同士の隙間を計算
     int availableSpace = limitY - startY - CARD_H;
     int safeYOffset = (count > 1) ? (availableSpace / (count - 1)) : 40;
 
     // 指定されたアニメーション値と、収まるための値の小さい方を採用
-    int activeYOffset = (std::min)((int)currentYOffset, safeYOffset);
-
-    int maxDrawCount = (int)data.selectedCards.size();
-
-    // ベースカード（1枚目）の属性を事前に取得しておく
-    int baseIdx = data.selectedCards[0];
-    std::string baseElement = "無";
-    if (baseIdx >= 0 && baseIdx < (int)hand.size()) {
-        baseElement = hand[baseIdx].GetType();
-    }
+    int activeYOffset = (std::min)((int)local.currentYOffset, safeYOffset);
+    int maxDrawCount = (int)targetCards.size();
 
     // --- 選択されたすべてのカードを縦リストとして描画 ---
     for (int i = 0; i < maxDrawCount; ++i) {
-        int handIdx = data.selectedCards[i];
+        int handIdx = targetCards[i];
         if (handIdx >= 0 && handIdx < (int)hand.size()) {
             const auto& card = hand[handIdx];
 
@@ -436,8 +427,6 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
 
             // 加算カードの属性色引き継ぎロジック
             int Ele_Col = GetElementColor(card.GetType());
-
-            int textX = drawX + CARD_W + 15;
 
             // カテゴリ別文字描画
             TCHAR buf[64] = _T("");
@@ -479,8 +468,8 @@ void BattleUIManager::DrawSelectedCard(const BattleData& data, const Player& pla
         }
     }
 
-    // 合計威力の表示（手札一覧の少し上に表示。ここも連動して滑らかに動きます） 
-    int BaseIdx = data.selectedCards[0];
+    // 合計威力の表示
+    int BaseIdx = targetCards[0];
     if (BaseIdx < 0 || BaseIdx >= (int)hand.size()) return;
     CardCategory baseCat = hand[BaseIdx].GetCategory();
     if (baseCat == Healing || baseCat == MagicHealing) return;
@@ -539,7 +528,7 @@ Rect BattleUIManager::GetHandCardRect(int handIndex) const {
 }
 
 // 今のターンのプレイヤー名表示
-void BattleUIManager::DrawTurnPlayerName(const Player& player)const {
+void BattleUIManager::DrawTurnPlayerName(const Player& player) const {
     int x = 15;
     int y = 70;
     int r = 10;
@@ -604,20 +593,27 @@ void BattleUIManager::DrawTargetPlayerName(const BattleData& data) const {
 }
 
 // 防御側のカード表示
-void BattleUIManager::DrawDefenseCards(const BattleData& data,
-    const Player& player, int defenceIdx, float currentYOffset) const {
+void BattleUIManager::DrawDefenseCards(const BattleData& data, const Player& player, const LocalClientData& local) const {
+    // 描画対象のカードリストを状況によって切り替える
+    std::vector<int> targetCards;
+    if (data.currentPhase == BattlePhase::DefenseSelect && local.myPlayerIndex == data.targetIdx) {
+        targetCards = local.localSelectingCards; // 自分が防御側の場合はローカル選択中カードを表示
+    }
+    else {
+        targetCards = data.confirmedDefenseCards;
+    }
 
     // まだカードが選ばれていない場合は何もしない
-    if (data.selectedDefenseCards.empty()) return;
+    if (targetCards.empty()) return;
 
     const auto& hand = player.Hand.GetCards();
 
     // 描画開始座標 (ターゲット名の下)
     int startX = 350;
     int startY = 95;
-    const int limitY = 340; // 画面下限（手札エリアに被らないギリギリの位置）
+    const int limitY = 340; // 画面下限
     const int boxWidth = 250;
-    int yOffset = (int)currentYOffset;
+    int yOffset = (int)local.currentYOffset;
 
     // --- サイズ設定（手札より少し小さめ） ---
     const float SCALE = 1.0f;
@@ -625,23 +621,22 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
     const int CARD_H = (int)(50 * SCALE);
 
     // --- 動的なYオフセット計算 ---
-    int count = (int)data.selectedDefenseCards.size();
+    int count = (int)targetCards.size();
 
-    // safeYOffset が正しく計算されるよう、分子を (limitY - startY - CARD_H) に
     int availableSpace = limitY - startY - CARD_H;
     int safeYOffset = (count > 1) ? (availableSpace / (count - 1)) : 40;
     // 指定されたアニメーション値と、収まるための値の小さい方を採用
-    int activeYOffset = (std::min)((int)currentYOffset, safeYOffset);
+    int activeYOffset = (std::min)((int)local.currentYOffset, safeYOffset);
 
     // 選択フェーズなら全表示、演出フェーズならカウント分だけ表示
-    int maxDrawCount = (int)data.selectedDefenseCards.size(); // 基本は全表示
+    int maxDrawCount = (int)targetCards.size(); // 基本は全表示
     if (data.currentPhase == BattlePhase::DefenseReveal) {
-        // 演出中のみカウントによる制限をかける
-        maxDrawCount = (std::min)((int)data.selectedDefenseCards.size(), data.animDefenseCardCount);
+        // 演出中のみローカルのカウントによる制限をかける
+        maxDrawCount = (std::min)((int)targetCards.size(), local.animDefenseCardCount);
     }
 
     for (int i = 0; i < maxDrawCount; ++i) {
-        int handIdx = data.selectedDefenseCards[i];
+        int handIdx = targetCards[i];
         if (handIdx >= 0 && handIdx < (int)hand.size()) {
             const auto& card = hand[handIdx];
             int drawX = startX;
@@ -687,29 +682,29 @@ void BattleUIManager::DrawDefenseCards(const BattleData& data,
                 DrawString(textX, drawY + 22, buf, Ele_Col);
             }
         }
-        // =============================================================
-        // 合計防御力の表示
-        // =============================================================
-
-        // ロジック側で計算済みの最終属性をそのまま取得
-        std::string effectiveDefElement = data.currentDefenseElement;
-        if (effectiveDefElement == "") effectiveDefElement = "無";
-
-        int totalEleCol = GetElementColor(effectiveDefElement);
-
-        int totalDrawX = startX + 100;
-        int totalDrawY = 400;
-        const int totalbox_x = 340;
-        const int totalbox_y = 395;
-
-        DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
-        DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
-
-        DrawFormatStringToHandle(totalDrawX, totalDrawY, totalEleCol, Font.GetSmall(), _T("守 %d"), data.defenseTotalPower);
     }
+    // =============================================================
+    // 合計防御力の表示
+    // =============================================================
+
+    // ロジック側で計算済みの最終属性をそのまま取得
+    std::string effectiveDefElement = data.currentDefenseElement;
+    if (effectiveDefElement == "") effectiveDefElement = "無";
+
+    int totalEleCol = GetElementColor(effectiveDefElement);
+
+    int totalDrawX = startX + 100;
+    int totalDrawY = 400;
+    const int totalbox_x = 340;
+    const int totalbox_y = 395;
+
+    DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetWhi(), TRUE);
+    DrawBox(totalbox_x, totalbox_y, totalbox_x + 271, totalbox_y + 25, Col.GetBla(), FALSE);
+
+    DrawFormatStringToHandle(totalDrawX, totalDrawY, totalEleCol, Font.GetSmall(), _T("守 %d"), data.defenseTotalPower);
 }
 
-void BattleUIManager::DrawSurrenderWindow(const BattleData& data) const {
+void BattleUIManager::DrawSurrenderWindow(const LocalClientData& local) const {
 
     SetDrawBlendMode(DX_BLENDMODE_ALPHA, 120);
     DrawBox(0, 50, 1000, 750, GetColor(0, 0, 0), TRUE);
@@ -720,13 +715,13 @@ void BattleUIManager::DrawSurrenderWindow(const BattleData& data) const {
 
     DrawString(415, 240, "本当に降参しますか？", GetColor(0, 0, 0));
 
-    unsigned int btnColor = data.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
+    unsigned int btnColor = local.isHoverIdx[(int)BattleOption::GIVE_UP] ? GetColor(255, 100, 100) : GetColor(200, 0, 0);
     DrawBox(425, 300, 575, 350, btnColor, TRUE);
     DrawString(460, 315, "あきらめる", GetColor(255, 255, 255));
 }
 
 // カード選択決定ボタンの描画
-void BattleUIManager::DrawCardSelectButton(const bool* ishoverIdx)const {
+void BattleUIManager::DrawCardSelectButton(const LocalClientData& local) const {
     const int DECISION_AREA_W = 271;
     const int DECISION_AREA_H = 325;
     const int ATK_BTN_X = 5;
@@ -734,17 +729,17 @@ void BattleUIManager::DrawCardSelectButton(const bool* ishoverIdx)const {
     const int DEF_BTN_X = 340;
     const int DEF_BTN_Y = ATK_BTN_Y;
     SetDrawBlendMode(DX_BLENDMODE_ALPHA, 150);
-    if (ishoverIdx[BattleOption::ATTACK]) {
+    if (local.isHoverIdx[BattleOption::ATTACK]) {
         DrawBox(ATK_BTN_X, ATK_BTN_Y, ATK_BTN_X + DECISION_AREA_W, ATK_BTN_Y + DECISION_AREA_H, Col.GetWhi(), TRUE);
     }
-    else if (ishoverIdx[BattleOption::DEFENSE]) {
+    else if (local.isHoverIdx[BattleOption::DEFENSE]) {
         DrawBox(DEF_BTN_X, DEF_BTN_Y, DEF_BTN_X + DECISION_AREA_W, DEF_BTN_Y + DECISION_AREA_H, Col.GetWhi(), TRUE);
     }
     SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 }
 
 // バトル終了画面の描画
-void BattleUIManager::DrawEndScreen(const BattleData& data) const {
+void BattleUIManager::DrawEndScreen(const BattleData& data, const LocalClientData& local) const {
     // 中央のウィンドウ
     DrawBox(200, 150, 800, 450, Col.GetBla(), TRUE);
     DrawBox(205, 155, 795, 445, Col.GetCurYel(), TRUE);
@@ -764,20 +759,20 @@ void BattleUIManager::DrawEndScreen(const BattleData& data) const {
     DrawFormatString(500 - (w / 2), 250, Col.GetRed(), "%s", resultText.c_str());
 
     // 戻るボタンの描画 (既存のボタン位置に合わせるか、中央に配置)
-    unsigned int color = data.isHoverIdx[BattleOption::RETURN] ? Col.GetSky() : Col.GetWhi();
+    unsigned int color = local.isHoverIdx[BattleOption::RETURN] ? Col.GetSky() : Col.GetWhi();
     DrawBox(400, 350, 600, 400, color, TRUE);
     DrawBox(400, 350, 600, 400, Col.GetBla(), FALSE);
     DrawString(460, 365, _T("バトル設定へ戻る"), Col.GetBla());
 }
 
 // ダメージ・回復のポップアップ描画
-void BattleUIManager::DrawPopups(const BattleData& data) const {
+void BattleUIManager::DrawPopups(const BattleData& data, const LocalClientData& local) const {
     const int startX_atc = 117;     // 攻撃側のプレイヤー関係のポップアップ原点
     const int startX_def = 475;     // 防御側のプレイヤー関係のポップアップ原点
     const int startY = 70;
     const int marginY = 40;
 
-    for (const auto& popup : data.popups) {
+    for (const auto& popup : local.popups) {
         // タイマーが0以下のものは描画をスキップする
         if (popup.timer <= 0) continue;
 
@@ -785,7 +780,7 @@ void BattleUIManager::DrawPopups(const BattleData& data) const {
         float progress = 0.0f;
         if (popup.maxTimer > 0) progress = 1.0f - ((float)popup.timer / popup.maxTimer);
 
-        // 基本位置の算出
+        // 基本位置の算出 (現在ターンプレイヤーかどうかで位置を決定)
         int drawX = (popup.playerIdx == data.currentTurnIdx) ? startX_atc : startX_def;
         int baseY = startY + (popup.playerIdx * marginY);
 
@@ -821,7 +816,7 @@ void BattleUIManager::DrawPopups(const BattleData& data) const {
 }
 
 // 換（ステータス変更）ウィンドウの描画
-void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
+void BattleUIManager::DrawChangeStatusWindow(const BattleData& data, const LocalClientData& local) const {
     // 背景
     DrawRoundRect(250, 180, 750, 420, 20, 20, Col.GetWhi(), TRUE);
     DrawRoundRect(250, 180, 750, 420, 20, 20, Col.GetBla(), FALSE);
@@ -836,8 +831,6 @@ void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
     int money = p.getMoney();
 
     // --- ステータス表示エリア ---
-    // ※ ロジック側で「現在選択中のステータス（HP/MP/お金）」を管理する変数
-    // （例: data.changeTargetStatus）がある前提のUIハイライト表現です。
     int statX = 300;
     int statY = 250;
 
@@ -856,7 +849,7 @@ void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
         int y = statY + 100;       // 下部に配置
 
         // ホバー判定（BattleOptionのインデックス定義に合わせて適宜変更してください）
-        // bool isHover = data.isHoverIdx[BattleOption::CHANGE_PLUS_10 + i];
+        // bool isHover = local.isHoverIdx[BattleOption::MP_ADD + i];
         bool isHover = false; // 仮置き
         unsigned int col = isHover ? Col.GetCurYel() : 0xD4AF37;
 
@@ -872,13 +865,13 @@ void BattleUIManager::DrawChangeStatusWindow(const BattleData& data) const {
 }
 
 // 買（購入確認）ウィンドウの描画
-void BattleUIManager::DrawBuyConfirmWindow(const BattleData& data) const {
+void BattleUIManager::DrawBuyConfirmWindow(const BattleData& data, const LocalClientData& local) const {
     DrawBox(300, 200, 700, 400, Col.GetBla(), TRUE);
     DrawBox(305, 205, 695, 395, Col.GetBoxYel(), TRUE);
 
     // はい / いいえ ボタンの描画（ホバー状態で色を変える想定）
-    unsigned int yesCol = data.isHoverIdx[BattleOption::BUY_YES] ? Col.GetCurYel() : Col.GetWhi();
-    unsigned int noCol = data.isHoverIdx[BattleOption::BUY_NO] ? Col.GetCurYel() : Col.GetWhi();
+    unsigned int yesCol = local.isHoverIdx[BattleOption::BUY_YES] ? Col.GetCurYel() : Col.GetWhi();
+    unsigned int noCol = local.isHoverIdx[BattleOption::BUY_NO] ? Col.GetCurYel() : Col.GetWhi();
 
     DrawBox(350, 320, 450, 360, yesCol, TRUE);
     DrawBox(350, 320, 450, 360, Col.GetBla(), FALSE);

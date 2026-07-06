@@ -39,6 +39,7 @@ protected:
     virtual bool ShouldDrawStartButton() const override;
 
 public:
+    virtual std::vector<Player> GetBattlePlayers() const override;
 
     void SetNetworkManager(NetworkManager* manager) override { netManager = manager; }
 

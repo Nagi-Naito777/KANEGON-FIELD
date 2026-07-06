@@ -261,12 +261,12 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, LocalClientData&
                 BattleLogicManager logic;
                 if (data.currentPhase == BattlePhase::Select) {
                     // ‚±‚±‚Å localData.localSelectingCards ‚ð“n‚µ‚ÄŒvŽZ‚³‚¹‚é
-                    logic.RecalculateAttackElement(data, activeSelection, humanHandVec);
+                    logic.RecalculateAttackElement(data, localData, humanHandVec);
                     data.attackTotalPower = 0;
                     for (int idx : activeSelection) data.attackTotalPower += humanHandVec[idx].GetPower();
                 }
                 else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-                    logic.RecalculateDefenseElement(data, activeSelection, humanHandVec);
+                    logic.RecalculateDefenseElement(data, localData, humanHandVec);
                     data.defenseTotalPower = 0;
                     for (int idx : activeSelection) data.defenseTotalPower += humanHandVec[idx].GetPower();
                 }

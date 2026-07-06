@@ -15,6 +15,8 @@ protected:
     // 修行モードでは常にスタートボタンを表示する
     virtual bool ShouldDrawStartButton() const override { return true; }
 public:
+    virtual std::vector<Player> GetBattlePlayers() const override;
+
     TrainingLobbyScene();
     virtual SceneName Update(const InputManager& input) override;
 };

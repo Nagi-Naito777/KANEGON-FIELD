@@ -101,19 +101,13 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 }
 
 SceneName BattleScene::Update(const InputManager& input) {
-	// プレイヤーがいなければ処理を止める
 	if (data.Player_Turn.empty()) {
 		return SceneName::BATTLE;
 	}
 
-	// 自分のプレイヤー参照（localData.myPlayerIndexを使用）
 	Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
 	bool isMyTurn = (data.currentTurnIdx == localData.myPlayerIndex);
 
-	// =============================================================
-	// 入力の取得（localDataを引数に追加）
-	// =============================================================
-	// UI操作やカード選択の履歴はすべて localData に反映される
 	PlayerAction myAction = inputManager.Update(data, localData, input, myPlayer, localData.myPlayerIndex, isMyTurn);
 
 	if (myAction.isSurrender) return SceneName::SELECT;
@@ -124,24 +118,24 @@ SceneName BattleScene::Update(const InputManager& input) {
 	// 通信対戦時の処理
 	// =============================================================
 	if (isOnline) {
-		// 【1. 受信処理】
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
-			// ホストから送られてきた状態を data (共有) に反映
 			if (packet.type == CommandType::SYNC_PHASE) {
 				data.currentPhase = static_cast<BattlePhase>(packet.value1);
-				// 演出リセットは localData 側で行う
 				localData.animFrame = 0;
 			}
-			// クライアントからの「攻撃ボタン押したよ」を受信したホストの処理
-			else if (packet.type == CommandType::START_BATTLE /* 便宜上、ACTION_ATTACKと読み替えてください */) {
+			else if (packet.type == CommandType::START_BATTLE) {
 				if (netManager->IsHost()) {
-					// ここで相手の選んだカード情報などをdataに反映し、フェーズを進める
-					BattlePhase nextPhase = BattlePhase::DefenseSelect; // 状況に応じて分岐
+					// 相手のアクション内容を受信してdataに反映済みという前提
+					// もし回復行動(ターゲットが自分)なら、防御フェーズをスキップする
+					BattlePhase nextPhase = BattlePhase::DefenseSelect;
+					if (data.targetIdx == data.currentTurnIdx) {
+						nextPhase = BattlePhase::DefenseReveal;
+					}
+
 					data.currentPhase = nextPhase;
 					localData.animFrame = 0;
 
-					// 結果を全員に配る
 					GamePacket syncP;
 					syncP.type = CommandType::SYNC_PHASE;
 					syncP.value1 = (int)nextPhase;
@@ -150,33 +144,42 @@ SceneName BattleScene::Update(const InputManager& input) {
 			}
 		}
 
-		// 【2. アクション送信処理】
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
 				if (netManager->IsHost()) {
-					// ホストは直接フェーズを更新
-					data.currentPhase = BattlePhase::DefenseSelect;
+					// ホストは直接フェーズを更新（回復判定を考慮）
+					BattlePhase nextPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+					data.currentPhase = nextPhase;
 					localData.animFrame = 0;
-					// 他全員に同期
-					netManager->BroadcastPacket(CommandType::SYNC_PHASE, (int)data.currentPhase);
+
+					// GamePacket構造体を作ってからブロードキャストする
+					GamePacket syncPacket = {}; // ゼロクリア初期化
+					syncPacket.type = CommandType::SYNC_PHASE;
+					syncPacket.value1 = (int)data.currentPhase;
+
+					netManager->BroadcastPacket(syncPacket);
 				}
 				else {
-					// クライアントはサーバーに送信
-					netManager->SendPacket(CommandType::START_BATTLE);
+					// ★修正: GamePacket構造体を作ってからサーバー(ホスト)に送信する
+					GamePacket sendPacket = {}; // ゼロクリア初期化
+					sendPacket.type = CommandType::START_BATTLE;
+					// 必要であれば sendPacket.value1 などに選んだカードの情報などを入れる
+
+					netManager->SendPacket(sendPacket);
 				}
 			}
 		}
 
-		// 【3. ロジック計算】ホストのみがゲーム進行を管理
+		// ホストのみがゲーム進行・AIを管理
 		if (netManager->IsHost()) {
-			logicManager.Update(data);
+			logicManager.Update(data, localData);
+			aiManager.Update(data); // 通信環境下でも、誰かが落ちた際の代打ちなどに対応可能
 		}
 	}
 	// =============================================================
 	// AI対戦（オフライン）の処理
 	// =============================================================
 	else {
-		// オフラインなら、決定ボタンが押されたら直接フェーズを進める
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
 				data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
@@ -188,9 +191,9 @@ SceneName BattleScene::Update(const InputManager& input) {
 			}
 		}
 
-		// AIは共有データ(data)を見て判断し、共有データを更新する
-		aiManager.Update(data, localData.myPlayerIndex, isMyTurn);
-		logicManager.Update(data);
+		// 引数を減らしてシンプルに。内部でControllerTypeを見て動作する
+		aiManager.Update(data);
+		logicManager.Update(data, localData);
 	}
 
 	return SceneName::BATTLE;

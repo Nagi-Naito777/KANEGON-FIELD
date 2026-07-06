@@ -13,6 +13,28 @@ TrainingLobbyScene::TrainingLobbyScene()
     for (int i = 0; i < 9; i++) { isHoverIdx2[i] = false; }
 }
 
+// TrainingLobbyScene.cpp ‚É’Ç‰Á
+std::vector<Player> TrainingLobbyScene::GetBattlePlayers() const {
+    std::vector<Player> players;
+
+    // Ž©•ª‚ð’Ç‰Á
+    Player user;
+    user.setName(g_player.getName());
+    user.setControllerType(ControllerType::HUMAN);
+    players.push_back(user);
+
+    // selectedMemberCount ‚ÉŠî‚Ã‚¢‚Ä AI ‚ð’Ç‰Á
+    for (int n = 1; n < selectedMemberCount; n++) {
+        Player ai;
+        std::string aiName = "AI " + std::to_string(n);
+        ai.setName(aiName.c_str());
+        ai.setControllerType(ControllerType::AI);
+        players.push_back(ai);
+    }
+
+    return players;
+}
+
 SceneName TrainingLobbyScene::Update(const InputManager& input) {
     for (int i = 0; i < MAX; i++) { isHoverIdx[i] = false; }
 
@@ -53,21 +75,8 @@ SceneName TrainingLobbyScene::Update(const InputManager& input) {
         if (isHoverIdx[RETURN]) return OnReturnClicked();
         if (isHoverIdx[MEMBER]) MemberCustom = true;
         if (isHoverIdx[BATTLE_START]) {
-            BattlePlayer.clear();
-            // Ž©•ª‚ð’Ç‰Á
-            Player user;
-            user.setName(g_player.getName());
-            user.setControllerType(ControllerType::HUMAN);
-            BattlePlayer.push_back(user);
-
-            // AI‚ð’Ç‰Á
-            for (int n = 1; n < selectedMemberCount; n++) {
-                Player ai;
-                std::string aiName = "AI " + std::to_string(n);
-                ai.setName(aiName.c_str());
-                ai.setControllerType(ControllerType::AI);
-                BattlePlayer.push_back(ai);
-            }
+            // BattlePlayer‚Ö‚ÌŠi”[ˆ—‚Í‚à‚¤•s—vI
+            // ‘JˆÚæ‚ÌSceneManager‚ªGetBattlePlayers‚ðŒÄ‚ñ‚Å‚­‚ê‚é‚Ì‚ÅA‚»‚Ì‚Ü‚Ü return ‚·‚é‚¾‚¯
             return SceneName::BATTLE;
         }
     }
