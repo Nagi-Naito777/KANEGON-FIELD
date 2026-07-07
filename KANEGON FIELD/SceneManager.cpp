@@ -55,9 +55,6 @@ void SceneManager::Update(const InputManager& input) {
 
     // 要望されたシーンが現在のシーンと異なる場合、シーンを切り替える
     if (nextName != m_currentName && nextName != SceneName::NONE) {
-
-        printfDx("DEBUG: Transition requested: %d -> %d\n", (int)m_currentName, (int)nextName);
-
         // 切り替え時にデータを一時保持するための変数
         std::vector<Player> carryOverPlayers;
 
@@ -68,10 +65,6 @@ void SceneManager::Update(const InputManager& input) {
             if (lobbyScene) {
                 // 子クラスが修行だろうが乱闘だろうが、親の機能を使ってデータを取り出せる
                 carryOverPlayers = lobbyScene->GetBattlePlayers(); 
-                printfDx("DEBUG: Extracted players count: %d\n", (int)carryOverPlayers.size());
-            }
-            else {
-                printfDx("DEBUG: Failed to cast to BaseLobbyScene!\n");
             }
         }
 

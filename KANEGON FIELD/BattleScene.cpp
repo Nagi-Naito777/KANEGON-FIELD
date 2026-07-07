@@ -126,19 +126,27 @@ SceneName BattleScene::Update(const InputManager& input) {
 	// 通信対戦時の処理
 	// =============================================================
 	if (isOnline) {
-		// パケット受信処理（ホスト・クライアント共通）
+		// 1. パケット受信処理（ホスト・クライアント共通）
 		GamePacket packet;
 		while (netManager->PopPacket(packet)) {
-			printfDx("DEBUG: Received Packet Type: %d\n", (int)packet.type); // 受信確認用
+			printfDx("DEBUG: Received Packet Type: %d\n", (int)packet.type);
 
+			// 【共通】フェーズの同期
 			if (packet.type == CommandType::SYNC_PHASE) {
 				data.currentPhase = static_cast<BattlePhase>(packet.value1);
 				localData.animFrame = 0;
 			}
-			else if (packet.type == CommandType::START_BATTLE) {
-				if (netManager->IsHost()) {
-					// ホストはパケットを受けてフェーズを進行させる
-					BattlePhase nextPhase = (data.targetIdx == data.currentTurnIdx) ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+
+			// 【ホスト側】クライアントからのアクションを受信
+			if (netManager->IsHost()) {
+				if (packet.type == CommandType::CLIENT_ACTION) {
+					// クライアントのアクション（選んだカードや対象）をホストの data に反映する
+					// 例: 
+					// data.Player_Turn[packet.clientID].selectedCard = packet.value1;
+					// data.targetIdx = packet.value2;
+
+					// アクションを受け取ったのでフェーズを進行させる
+					BattlePhase nextPhase = BattlePhase::DefenseSelect;
 					data.currentPhase = nextPhase;
 					localData.animFrame = 0;
 
@@ -148,9 +156,19 @@ SceneName BattleScene::Update(const InputManager& input) {
 					netManager->BroadcastPacket(syncP);
 				}
 			}
+			// 【クライアント側】ホストからのゲームデータ同期を受信
+			else {
+				if (packet.type == CommandType::SYNC_GAME_DATA) {
+					// ホストから送られてきたHP、手札情報、ターンの状態などで自身の data を上書きする
+					// 例:
+					// data.currentTurnIdx = packet.value1;
+					// data.Player_Turn[packet.targetPlayer].HP = packet.value2;
+					// ※GamePacketの構造に合わせて必要なデータを反映してください
+				}
+			}
 		}
 
-		// アクション送信処理
+		// 2. アクション送信処理
 		if (myAction.hasAction) {
 			if (myAction.isAttackDecision) {
 				if (netManager->IsHost()) {
@@ -163,17 +181,53 @@ SceneName BattleScene::Update(const InputManager& input) {
 					netManager->BroadcastPacket(syncPacket);
 				}
 				else {
-					// クライアントはホストに依頼（リクエスト）を送信
-					printfDx("DEBUG: Sending START_BATTLE request\n"); // 送信確認用
-					GamePacket sendPacket = { CommandType::START_BATTLE };
-					netManager->SendPacket(sendPacket);
+					// クライアントは自分のアクション内容（選択カード等）をホストに送信する
+					printfDx("DEBUG: Sending CLIENT_ACTION request\n");
+					GamePacket actionPacket;
+					actionPacket.type = CommandType::CLIENT_ACTION;
+					// actionPacket.value1 = myAction.selectedCardID;     // 例
+					// actionPacket.value2 = myAction.targetPlayerIndex;  // 例
+					netManager->SendPacket(actionPacket);
 				}
 			}
 		}
-		// ゲーム進行権限（ホストのみがロジックを回す）
+
+		// 3. ゲーム進行権限（ホストのみがロジックを回す）
 		if (netManager->IsHost()) {
+			// ホスト側で戦闘ロジックの計算とAIの処理を行う
 			logicManager.Update(data, localData);
 			aiManager.Update(data);
+
+			// ※ data.isChanged フラグ等をBattleData.hに定義しておき、
+			// ターン経過やダメージ処理が起きた時に true にする設計が推奨です。
+			// ここでは毎フレーム送らないための仮のフラグ制御を想定しています。
+			bool needsSync = true; // 実際は data.isChanged などを使用してください
+
+			if (needsSync) {
+				// プレイヤー全員分のデータを順番に送信する
+				for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+					GamePacket syncDataPacket;
+					syncDataPacket.type = CommandType::SYNC_GAME_DATA;
+
+					syncDataPacket.value1 = i; // どのプレイヤーのデータか
+					syncDataPacket.value2 = data.Player_Turn[i].getHp(); // 現在のHP
+					syncDataPacket.value3 = data.currentTurnIdx; // 現在のターンプレイヤー
+
+					// 手札の同期 (最大10枚想定)
+					// ※Handクラスの仕様に合わせてIDを取得してください
+					for (int c = 0; c < MAX_HAND_CARD; ++c) {
+						if (c < data.Player_Turn[i].Hand.GetCount()) {
+							syncDataPacket.cardIds[c] = data.Player_Turn[i].Hand.GetCards();
+						}
+						else {
+							syncDataPacket.cardIds[c] = -1; // 空枠
+						}
+					}
+
+					netManager->BroadcastPacket(syncDataPacket);
+				}
+				// data.isChanged = false; // 送信が終わったらフラグを戻す
+			}
 		}
 	}
 	// =============================================================

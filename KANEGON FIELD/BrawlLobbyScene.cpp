@@ -7,25 +7,31 @@ extern Player g_player;
 std::vector<Player> BrawlLobbyScene::GetBattlePlayers() const {
     std::vector<Player> players;
 
-    // m_lobbyPlayers（情報が詰まっている方）を変換して戻す
+    // 通信中かどうかを判定（メンバ変数 isConnected を利用）
+    bool isOnline = isConnected;
+
     for (const auto& lobbyP : m_lobbyPlayers) {
         Player p;
         p.setName(lobbyP.name);
 
-        // 自分の名前と一致するかでコントローラータイプを判定
+        // --- 修正ロジック ---
         if (lobbyP.name == g_player.getName()) {
+            // 自分は常にHUMAN
             p.setControllerType(ControllerType::HUMAN);
         }
         else {
-            p.setControllerType(ControllerType::AI);
+            // オンラインなら相手は通信相手(HUMAN)、オフラインならAI
+            if (isOnline) {
+                p.setControllerType(ControllerType::HUMAN);
+            }
+            else {
+                p.setControllerType(ControllerType::AI);
+            }
         }
-
         players.push_back(p);
     }
 
-    // デバッグ用（これで2以上になるはず！）
     printfDx("DEBUG: BrawlLobbyScene Returning %d players\n", (int)players.size());
-
     return players;
 }
 
