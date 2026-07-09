@@ -53,7 +53,7 @@ private:
     void DrawTurnPlayerName(const Player& player) const;
 
     // ターゲット指定されたプレイヤー名表示
-    void DrawTargetPlayerName(const BattleData& data) const;
+    void DrawTargetPlayerName(const BattleData& data, const LocalClientData& local) const;
 
     // 防御側のカード表示
     void DrawDefenseCards(const BattleData& data, const Player& player, const LocalClientData& local) const;

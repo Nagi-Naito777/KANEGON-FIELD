@@ -99,7 +99,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                 int newClientHandle = netManager->GetLastAddedClient();
                 for (const auto& p : m_lobbyPlayers) {
                     GamePacket syncP;
-                    syncP.type = CommandType::SYNC_LOBBY;
+                    syncP.type = (int)CommandType::SYNC_LOBBY;
                     syncP.teamId = p.teamId;
                     memset(syncP.playerName, 0, sizeof(syncP.playerName));
                     strncpy_s(syncP.playerName, sizeof(syncP.playerName), p.name.c_str(), _TRUNCATE);
@@ -114,11 +114,11 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
         GamePacket packet;
         while (netManager->PopPacket(packet)) {
             // バトル開始の合図を受信
-            if (packet.type == CommandType::START_BATTLE) {
+            if (packet.type == (int)CommandType::START_BATTLE) {
                 return SceneName::BATTLE;
             }
             // 【クライアント専用】ロビー情報の同期を受信
-            else if (packet.type == CommandType::SYNC_LOBBY) {
+            else if (packet.type == (int)CommandType::SYNC_LOBBY) {
                 bool found = false;
                 for (auto& p : m_lobbyPlayers) {
                     if (p.name == packet.playerName) {
@@ -131,7 +131,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                 }
             }
             // 誰かがチームを選択（またはキャンセル）した通知を受信
-            else if (packet.type == CommandType::SELECT_TEAM) {
+            else if (packet.type == (int)CommandType::SELECT_TEAM) {
                 if (packet.teamId == -1) {
                     // teamId が -1 の場合はキャンセル扱い。リストからその人を削除する
                     for (auto it = m_lobbyPlayers.begin(); it != m_lobbyPlayers.end(); ) {
@@ -163,7 +163,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                 }
             }
             // 誰かとの接続が切れた通知を受信
-            else if (packet.type == CommandType::DISCONNECT) {
+            else if (packet.type == (int)CommandType::DISCONNECT) {
                 for (auto it = m_lobbyPlayers.begin(); it != m_lobbyPlayers.end(); ) {
                     if (it->name == packet.playerName) {
                         it = m_lobbyPlayers.erase(it); // リストから削除
@@ -229,7 +229,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
             // ShouldDrawStartButton() を使ってクリック判定を行う
             if (ShouldDrawStartButton() && isHoverIdx[BATTLE_START]) {
                 if (CanStartBattle()) {
-                    GamePacket p; p.type = CommandType::START_BATTLE;
+                    GamePacket p; p.type = (int)CommandType::START_BATTLE;
 
                     // ホストがバトル開始を決定するので BroadcastPacket を使う
                     netManager->BroadcastPacket(p);
@@ -279,7 +279,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
 
                     // 3. 通信で全員に知らせる
                     GamePacket p;
-                    p.type = CommandType::SELECT_TEAM;
+                    p.type = (int)CommandType::SELECT_TEAM;
                     p.teamId = sendTeamId; // チーム変更時はそのID、キャンセル時は -1 が入る
 
                     // memset でゼロクリア（ここはそのまま）

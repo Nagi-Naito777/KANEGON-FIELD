@@ -129,6 +129,10 @@ void BattleInputManager::ProcessActionButtons(BattleData& data,
 
             action.isAttackDecision = true;
             action.hasAction = true;
+
+            // アクション構造体に通信用のデータを詰める
+            action.targetIdx = data.targetIdx;
+            action.selectedCardIdxs = localData.localSelectingCards;
         }
     }
     // =============================================================
@@ -139,12 +143,15 @@ void BattleInputManager::ProcessActionButtons(BattleData& data,
         localData.isHoverIdx[BattleOption::DEFENSE] = input.IsMouseOver(DEF_BTN_X, DEF_BTN_Y, DECISION_AREA_W, DECISION_AREA_H);
 
         if (input.IsLeftClicked() && localData.isHoverIdx[BattleOption::DEFENSE]) {
-
             // 防御カードを確定させる
             data.confirmedDefenseCards = localData.localSelectingCards;
 
             action.isDefenseDecision = true;
             action.hasAction = true;
+
+            // アクション構造体に通信用のデータを詰める
+            action.targetIdx = data.targetIdx;
+            action.selectedCardIdxs = localData.localSelectingCards;
         }
     }
 }

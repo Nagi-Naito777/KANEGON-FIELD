@@ -20,26 +20,31 @@ enum class CommandType {
     SELECT_TEAM,    // チーム選択通知
     DISCONNECT,     // 切断通知
     SYNC_LOBBY,     // 全員の情報を一括で送るコマンド
+    ASSIGN_ID,
+    SYNC_PRIVATE_HAND, //秘密の手札配り用コマンド
 
     // ---- バトル同期用に追加 ----
     CLIENT_ACTION,  // クライアントの行動（カード選択・対象など）をホストに送る
     SYNC_GAME_DATA  // ホストから最新のゲーム状態（HP・手札など）をクライアントに送る
 };
 
+#pragma pack(push, 1)
 // ゲーム用のパケット構造体（固定長）
 struct GamePacket {
-    CommandType type;
+    int type;
     int teamId;                      // 選んだチーム番号を送るため
     char playerName[MAX_NAME_LEN];   // 誰が選んだかを送るため
-
     // --- バトル用に汎用データ領域を拡張 ---
     int value1;                      // フェーズ番号 / 使用したカード番号 / プレイヤーのIndexなど
     int value2;                      // ターゲットのIndex / プレイヤーのHP など
     int value3;                      // 現在のターン数(currentTurnIdx) など自由に使用
-
+    int value4;
+    int value5;
     // --- 手札の同期用に配列を拡張 ---
     int cardIds[MAX_HAND_CARD];      // 1人分の手札（カードID）をまとめて送るための配列
+    int playedCardIds[MAX_HAND_CARD];            // 攻撃確定カード用（配列サイズは適宜調整）
 };
+#pragma pack(pop)
 
 class NetworkManager {
 private:

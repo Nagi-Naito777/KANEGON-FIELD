@@ -14,6 +14,12 @@ struct PlayerAction {
 	bool isAttackDecision = false;  // 攻撃決定ボタンを押したか
 	bool isDefenseDecision = false; // 防御決定ボタンを押したか
 	bool isHealAction = false;		// 回復系カードであることを示すフラグ
+
+    // --- 【追加】通信でホストに具体的な行動を伝えるための変数 ---
+    std::vector<int> selectedCardIdxs;       // 選んだカードのインデックス（コンボ対応）
+    int targetIdx = -1;             // 攻撃(または回復)の対象となるプレイヤーのインデックス
+
+
 	// 今後「選んだカードのID」などもここに追加していくと、通信がさらに楽になります
 };
 

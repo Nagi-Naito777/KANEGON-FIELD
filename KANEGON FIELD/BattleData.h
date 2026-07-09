@@ -52,6 +52,12 @@ enum class BattlePhase {
 	Idle              // カード破棄・ドロー・次ターン準備
 };
 
+// ゲームモードの定義（乱闘 or タイマン）
+enum class GameMode {
+	BRAWL,			// 乱闘モード（最大9人）
+	SERIOUS_DUEL	// 真剣勝負モード（1対1の2人対戦）
+};
+
 // 戦闘画面のボタン判定用の列挙体
 enum BattleOption {
 	NONE = -1,
@@ -73,9 +79,13 @@ enum BattleOption {
 // ============================================================================
 struct BattleData {
 	// --- 戦闘の進行・状態管理 ---
+	GameMode currentMode = GameMode::BRAWL;	// 現在のゲームモード
 	BattlePhase currentPhase = BattlePhase::Select; // 現在のフェーズ
 	std::vector<Player> Player_Turn;		// 参加プレイヤー一覧
 	int currentTurnIdx;						// 現在のターンプレイヤーのインデックス
+
+	// 通信同期用の制御フラグ
+	bool isChanged = false;
 
 	// --- 確定した行動データ（全員の画面に反映されるもの） ---
 	std::vector<int> confirmedAttackCards;	// 決定ボタンを押して確定した攻撃カード
@@ -113,6 +123,8 @@ struct BattleData {
 		currentPhase = BattlePhase::Select;
 		currentTurnIdx = 0;
 		Player_Turn.clear();
+
+		isChanged = false;
 
 		confirmedAttackCards.clear();
 		confirmedDefenseCards.clear();

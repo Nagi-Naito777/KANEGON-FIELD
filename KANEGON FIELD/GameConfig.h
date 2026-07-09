@@ -39,6 +39,9 @@
 // カードの最大所持枚数
 #define CARD_MAX 18
 
+// 初期手札枚数
+#define START_CARD 9
+
 #include "DxLib.h"
 
 // フォント管理クラス

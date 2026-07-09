@@ -18,6 +18,13 @@ unsigned int BattleUIManager::GetElementColor(const std::string& elementType) co
 }
 
 void BattleUIManager::Draw(const BattleData& data, const LocalClientData& local) const {
+    // 追記：ここが 3 になっているか確認！
+    static int lastCount = 0;
+    if ((int)data.Player_Turn.size() != lastCount) {
+        printfDx("DEBUG: Current Player Count: %d\n", (int)data.Player_Turn.size());
+        lastCount = (int)data.Player_Turn.size();
+    }
+
     // プレイヤーがいない場合はエラー（アクセス違反）を防ぐために処理を中止する
     if (data.Player_Turn.empty()) {
         return;
@@ -53,7 +60,7 @@ void BattleUIManager::Draw(const BattleData& data, const LocalClientData& local)
     if ((data.currentPhase == BattlePhase::Select && data.playerTarget) ||
         data.currentPhase == BattlePhase::DefenseSelect ||
         data.currentPhase == BattlePhase::DamageResult) {
-        DrawTargetPlayerName(data);
+        DrawTargetPlayerName(data, local);
     }
 
     // --- カウンター（跳ね返し）待機中のUI表示 ---
@@ -89,22 +96,16 @@ void BattleUIManager::Draw(const BattleData& data, const LocalClientData& local)
 
     // 操作プレイヤー（人間）を探して情報を取得
     const Player* humanPlayer = nullptr;
-    int humanIdx = -1;
-    for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
-        if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
-            humanPlayer = &data.Player_Turn[i];
-            humanIdx = (int)i;
-            break;
-        }
-    }
+    int humanIdx = local.myPlayerIndex;
+    if (humanIdx >= 0 && humanIdx < (int)data.Player_Turn.size()) {
+        const Player* humanPlayer = &data.Player_Turn[humanIdx];
 
-    if (humanPlayer) {
         // 手札の描画
         DrawPlayerHand(data, *humanPlayer, local);
 
-        // 決定ボタンの描画 (自分が操作すべきフェーズの時だけ表示)
+        // 決定ボタンの描画
         if (data.currentPhase == BattlePhase::Select && humanIdx == data.currentTurnIdx) {
-            DrawCardSelectButton(local); // 攻撃決定
+            DrawCardSelectButton(local);
         }
         if (data.currentPhase == BattlePhase::DefenseSelect && humanIdx == data.targetIdx) {
             DrawCardSelectButton(local); // 防御決定
@@ -142,8 +143,10 @@ void BattleUIManager::DrawPlayerStatus(const BattleData& data, const LocalClient
         if (local.isHoverPlayerIdx[i]) {
             bgColor = Col.GetCurYel();  // 薄黄色
         }
-        if (data.playerTarget && data.targetIdx == (int)i) {
-            bgColor = Col.GetRed(); // 選択済みのターゲットは赤色
+
+        // サーバーで確定したターゲットに加えて、ローカルで仮決定しているターゲットも赤くする
+        if ((data.playerTarget && data.targetIdx == (int)i) || (local.localTargetIdx == (int)i)) {
+            bgColor = Col.GetRed(); // 選択済み・選択中のターゲットは赤色
         }
 
         // 名前UIの枠の描画
@@ -553,8 +556,11 @@ void BattleUIManager::DrawTurnPlayerName(const Player& player) const {
 }
 
 // ターゲット指定されたプレイヤー名表示
-void BattleUIManager::DrawTargetPlayerName(const BattleData& data) const {
-    if (data.targetIdx < 0 || data.targetIdx >= (int)data.Player_Turn.size()) return;
+void BattleUIManager::DrawTargetPlayerName(const BattleData& data, const LocalClientData& local) const {
+    // フェーズによって参照するターゲットを「ローカル」か「グローバル」か切り替える
+    int drawTargetIdx = (data.currentPhase == BattlePhase::Select) ? local.localTargetIdx : data.targetIdx;
+
+    if (drawTargetIdx < 0 || drawTargetIdx >= (int)data.Player_Turn.size()) return;
 
     int x = 350;
     int y = 70;
@@ -563,10 +569,10 @@ void BattleUIManager::DrawTargetPlayerName(const BattleData& data) const {
     int arrowColor = GetColor(0, 0, 0);
     int arrowY = y;
 
-    if (data.targetIdx != data.currentTurnIdx) {
+    if (drawTargetIdx != data.currentTurnIdx) {
         int stringWidth = GetDrawStringWidthToHandle(
-            data.Player_Turn[data.targetIdx].getName().c_str(),
-            (int)_tcslen(data.Player_Turn[data.targetIdx].getName().c_str()),
+            data.Player_Turn[drawTargetIdx].getName().c_str(),
+            (int)_tcslen(data.Player_Turn[drawTargetIdx].getName().c_str()),
             Font.GetSmall());
         int drawX = x + (boxWidth - stringWidth) / 2;
 
