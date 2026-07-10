@@ -561,10 +561,10 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
 
         // ポップアップ登録 (自身へのダメージ/回復)
         if (hpCost > 0) {
-            local.popups.push_back({ PopupType::Damage, data.currentTurnIdx, std::to_string(hpCost), 0xFF0000, 0, 60 });
+            local.popups.emplace_back(PopupType::Damage, data.currentTurnIdx, UIHelper::GetPopupText(PopupType::Damage, hpCost), 60, 0);
         }
         else if (hpCost < 0) {
-            local.popups.push_back({ PopupType::Heal, data.currentTurnIdx, std::to_string(-hpCost), 0x00FF00, 0, 60 });
+            local.popups.emplace_back(PopupType::Heal, data.currentTurnIdx, UIHelper::GetPopupText(PopupType::Heal, -hpCost), 60, 0);
         }
     }
     else if (name == "チョイスチョイス") {
@@ -618,8 +618,8 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
             }
         }
 
-        // 売却額のポップアップ
-        local.popups.push_back({ PopupType::Money, data.currentTurnIdx, "+￥" + std::to_string(price), 0xFFFF00, 0, 60 });
+        // ポップアップ登録
+        local.popups.emplace_back(PopupType::Money, data.currentTurnIdx, UIHelper::GetPopupText(PopupType::Money, price), 60, 0);
     }
 
     // カテゴリで大きく分岐
@@ -632,7 +632,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
             data.resultTargetIdx = data.targetIdx;
 
             // 回復ポップアップ
-            local.popups.push_back({ PopupType::Heal, data.targetIdx, std::to_string(card.GetPower()), 0x00FF00, 0, 60 });
+            local.popups.emplace_back(PopupType::Heal, data.targetIdx, UIHelper::GetPopupText(PopupType::Heal, card.GetPower()), 60, 0);
         }
     }
     // MP回復カードの処理
@@ -646,7 +646,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
             data.resultTargetIdx = data.targetIdx;
 
             // MP回復ポップアップ
-            local.popups.push_back({ PopupType::MagicHeal, data.targetIdx, std::to_string(card.GetPower()), 0x0000FF, 0, 60 });
+            local.popups.emplace_back(PopupType::MagicHeal, data.targetIdx, UIHelper::GetPopupText(PopupType::MagicHeal, card.GetPower()), 60, 0);
         }
     }
     else if (card.GetCategory() == CardCategory::Magic) {
@@ -930,7 +930,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local,
 
     // 「山」の条件成立時
     if (data.isParry && hasMagicAttack) {
-        local.popups.push_back({ PopupType::Parry, data.targetIdx, "弾いた！", 0x00FF00, 0, 60 });
+        local.popups.emplace_back(PopupType::Parry, data.targetIdx, UIHelper::GetPopupText(PopupType::Parry, 0), 60, 0);
 
         // カウンター攻撃として、受けるはずだったダメージと属性を「保留」にする
         data.isPendingAttack = true;
@@ -978,33 +978,43 @@ void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local,
 
     // 無属性攻撃を無効化
     if (data.isImmune && attack.type == "無") {
-        local.popups.push_back({ PopupType::NoHit, data.targetIdx, "無効！", 0xAAAAAA, 0, 60 });
+        local.popups.emplace_back(PopupType::Clear, data.targetIdx, UIHelper::GetPopupText(PopupType::Clear, 0), 60, 0);
         return;
     }
 
     // ダメージがマイナスにならないように
     if (finalDamage < 0) finalDamage = 0;
 
-    // 闇属性の特殊ルール
-    if (attack.type == "闇") {
-        if (finalDamage > 0) {
-            target.setHp(0);
-            target.Status.dead = true;
-        }
+    // --- HP適用とポップアップ表示 ---
+
+    // 1. HPの減少処理（共通化）
+    target.setHp(target.getHp() - finalDamage);
+    if (target.getHp() <= 0) {
+        target.setHp(0);
+        target.Status.dead = true;
+    }
+
+    // 2. ダメージポップアップの分岐
+    if (finalDamage > 0) {
+        // ダメージがある場合
+        local.popups.emplace_back(PopupType::Damage, data.targetIdx, UIHelper::GetPopupText(PopupType::Damage, finalDamage), 60, 0);
     }
     else {
-        // 通常ダメージ適用
-        target.setHp(target.getHp() - finalDamage);
-        if (target.getHp() <= 0) {
-            target.setHp(0);
-            target.Status.dead = true;
-        }
-        local.popups.emplace_back(PopupType::Damage, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+        // 【追加】ダメージが0だった場合（かつ、NoHitの早期リターンを抜けてきた場合）
+        local.popups.emplace_back(PopupType::NoDamage, data.targetIdx, UIHelper::GetPopupText(PopupType::NoDamage, 0), 60, 0);
+    }
 
-        // スティール（HP吸収処理）
+    // 3. 属性別の追加処理
+    if (attack.type == "闇") {
+        // 闇属性なら追加ダメージ用フラグを立てる
+        data.isLastAttackDark = true;
+    }
+    else {
+        // 闇以外の場合のみ、スティール（HP吸収）をチェック
         if (data.isDrain && finalDamage > 0) {
             attacker.setHp(attacker.getHp() + finalDamage);
-            local.popups.emplace_back(PopupType::Heal, data.targetIdx, std::to_string(finalDamage), 0xFF0000, 0, 60);
+            // 吸収時は「回復(Heal)」ポップアップを出す
+            local.popups.emplace_back(PopupType::Heal, data.currentTurnIdx, UIHelper::GetPopupText(PopupType::Heal, finalDamage), 60, 0);
         }
     }
 }

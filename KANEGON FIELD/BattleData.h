@@ -8,14 +8,16 @@
 // ログのタイプ判別用
 enum class PopupType {
 	Damage,		// ダメージ
+	NoDamage,	// 0ダメージにした
 	Heal,		// HP回復
 	MagicHeal,	// MP回復
 	Money,		// お金関係
-	Hit,		// 全体攻撃に当たったかどうか
+	Hit,		// 全体攻撃が命中した
+	NoHit,		// 全体攻撃に当たらなかった
 	YamiDama,	// 闇属性の追撃ダメージ
 	Counter,	// 跳ね返し
 	Parry,		// 弾き
-	NoHit		// 無効化
+	Clear		// 無効化
 };
 
 // ログの全体の種類
@@ -107,6 +109,7 @@ struct BattleData {
 	bool isParry = false;					// 攻撃を弾くフラグ
 	bool isCounter = false;					// 攻撃を跳ね返す(カウンター)フラグ
 	bool isDrain = false;					// HP吸収フラグ
+	bool isLastAttackDark = false;			// 闇属性攻撃フラグ
 
 	// --- カウンター（攻守逆転・連鎖）用の保持変数 ---
 	int originalTurnIdx = -1;               // カウンター発生前の本来のターンプレイヤーインデックス
@@ -143,6 +146,7 @@ struct BattleData {
 		isParry = false;
 		isCounter = false;
 		isDrain = false;
+		isLastAttackDark = false;
 
 		originalTurnIdx = -1;
 		isPendingAttack = false;
@@ -164,13 +168,11 @@ struct EffectPopup {
 	PopupType type;      // 演出の種類
 	int playerIdx;       // 対象プレイヤー
 	std::string text;    // 表示テキスト
-	unsigned int color;  // 色
-	int offsetY;         // Y座標オフセット
 	int timer;           // 現在の残り表示時間
 	int maxTimer;        // 初期の表示時間
 
-	EffectPopup(PopupType t, int pIdx, std::string txt, unsigned int c, int offY, int time)
-		: type(t), playerIdx(pIdx), text(txt), color(c), offsetY(offY), timer(time), maxTimer(time) {}
+	EffectPopup(PopupType t, int pIdx, std::string txt, int time, int delay = 0)
+		: type(t), playerIdx(pIdx), text(txt), timer(time + delay), maxTimer(time) {}
 };
 
 struct LocalClientData {
@@ -240,5 +242,25 @@ struct LocalClientData {
 
 		isCardSelectable.clear();
 		popups.clear();
+	}
+};
+
+// ポップアップクラス
+class UIHelper {
+public:
+	// static を付けることで、インスタンス化せずにどこからでも呼べるようにする
+	static std::string GetPopupText(PopupType type, int value) {
+		switch (type) {
+		case PopupType::Damage:    return std::to_string(value) + " ダメージ";
+		case PopupType::YamiDama:  return "闇追加 " + std::to_string(value);
+		case PopupType::Heal:      return "HP+ " + std::to_string(value);
+		case PopupType::MagicHeal: return "MP+ " + std::to_string(value);
+		case PopupType::Money:     return "￥+ " + std::to_string(value);
+		case PopupType::Counter:   return "跳ね返す";
+		case PopupType::Parry:     return "弾いた！";
+		case PopupType::NoHit:     return "止めた";
+		case PopupType::NoDamage:  return "無傷";
+		default:                   return std::to_string(value);
+		}
 	}
 };

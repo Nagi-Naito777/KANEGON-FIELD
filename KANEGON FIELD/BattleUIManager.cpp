@@ -775,34 +775,35 @@ void BattleUIManager::DrawEndScreen(const BattleData& data, const LocalClientDat
 void BattleUIManager::DrawPopups(const BattleData& data, const LocalClientData& local) const {
     const int startX_atc = 117;     // 攻撃側のプレイヤー関係のポップアップ原点
     const int startX_def = 475;     // 防御側のプレイヤー関係のポップアップ原点
-    const int startY = 70;
-    const int marginY = 40;
+    const int startY = 150;
 
     for (const auto& popup : local.popups) {
-        // タイマーが0以下のものは描画をスキップする
+        // --- 修正: 待機中かどうかチェック ---
+        // timerがmaxTimerより大きい場合はまだ待機中なのでスキップ
+        if (popup.timer > popup.maxTimer) continue;
         if (popup.timer <= 0) continue;
 
         // --- アニメーション計算 ---
-        float progress = 0.0f;
-        if (popup.maxTimer > 0) progress = 1.0f - ((float)popup.timer / popup.maxTimer);
+        float progress = 1.0f - ((float)popup.timer / popup.maxTimer);
 
         // 基本位置の算出 (現在ターンプレイヤーかどうかで位置を決定)
         int drawX = (popup.playerIdx == data.currentTurnIdx) ? startX_atc : startX_def;
-        int baseY = startY + (popup.playerIdx * marginY);
 
         // ダメージ系は下へ、回復系は上へ
         int floatOffsetY = (int)(progress * 40.0f);
         bool isUpward = (popup.type != PopupType::Damage);
-        int drawY = isUpward ? (baseY - floatOffsetY) : (baseY + floatOffsetY);
+        int drawY = isUpward ? (startY - floatOffsetY) : (startY + floatOffsetY);
 
         // --- 色の設定（デザインに合わせて調整） ---
         unsigned int boxCol = 0x808080; // デフォルトグレー
         switch (popup.type) {
-        case PopupType::Damage:   boxCol = 0xB22222; break; // 赤（濃い赤）
-        case PopupType::Heal:     boxCol = 0x228B22; break; // 緑
-        case PopupType::MagicHeal:boxCol = 0x6A5ACD; break; // 紫（画像の色に寄せました）
-        case PopupType::Parry:
-        case PopupType::Counter:  boxCol = 0xD4AF37; break; // 金色
+        case PopupType::Damage:   boxCol = Col.GetDamRed(); break;
+        case PopupType::YamiDama: boxCol = 0x4B0082; break; // 濃い紫（闇属性）
+        case PopupType::Heal:     boxCol = Col.GetHealGre(); break;
+        case PopupType::MagicHeal:boxCol = Col.GetBlu(); break;
+        case PopupType::Money:    boxCol = Col.GetYel(); break; 
+        case PopupType::Parry:    boxCol = 0xD4AF37; break; // 金色
+        case PopupType::Counter:  boxCol = 0x660022; break; // ピンク
         default:                  boxCol = 0x555555; break;
         }
 

@@ -27,392 +27,445 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 	// 完全初期化
 	data.Clear();
 	localData.Clear();
+    prevHps.clear(); // HP履歴も初期化
 
-	// 外部からちゃんとプレイヤーが渡された時だけ上書きする
-	if (!initialPlayers.empty()) {
-		data.Player_Turn = initialPlayers;
-	}
+    // 外部からちゃんとプレイヤーが渡された時だけ上書きする
+    if (!initialPlayers.empty()) {
+        data.Player_Turn = initialPlayers;
+
+        // 現在のHPで初期化
+        prevHps.resize(initialPlayers.size());
+        for (size_t i = 0; i < initialPlayers.size(); ++i) {
+            prevHps[i] = initialPlayers[i].getHp();
+        }
+    }
 
 	// オンラインかどうかを判定
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
 	printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
 
 	// --- AI対戦（オフライン）の時だけ実行する処理 ---
-	if (!isOnline) {
-		// 乱数エンジンのセットアップ
-		std::random_device seed_gen;
-		std::mt19937 engine(seed_gen());
+    if (!isOnline) {
+        SetupOfflineAI();
+    }
 
-		// AIの名前候補リスト
-		std::vector<std::string> aiNames = {
-			"ｼﾞﾝﾊﾞﾌﾞｴﾄﾞﾙ太郎", "ｷﾐﾉｶｾﾞﾊﾉﾄﾞｶﾗ", "カオスドゥラゴン", "破滅した世界", "アルコール", "ミセスタニシ",
-			"木下 明憲", "アンドロイド伊藤", "消しゴムｽﾚｲﾔｰ", "マスターゴリラ", "ミーティング次郎", "ﾏｲｹﾙ･ｼﾞｪｲｸｿﾝ",
-			"白川 真昼", "闇川 影虎", "森中 海導", "他人の鉛筆", "暴虐武人マン", "ナギナギ",
-			"清水一登太郎", "怪盗マラカス", "イグラドガネ", "コハクンチョス", "リンクカネゴン", "ネットワーク",
-			"System Error 404", "バチカン", "ブームブーム", "シャングリラ", "ｴﾝﾄﾞﾙｶﾈｺﾞﾝﾌｨｰﾙﾄﾞ", "アサアサ",
-			"アラスカの風", "ハリwood", "マーKING飛高", "謝罪サムライ", "GPT", "EDM", ".cpp",
-			"膝の上からｶﾝﾊﾟﾆｰ", "膝下ｽﾗｲﾃﾞｨﾝｸﾞ渉", "ワールドドリフ", ".h", "Destiny", "enum",
-			"心の歪み", "憎悪", "深淵の戦士 ｱｽﾛﾝ", "leading", "string.h", "using",
-			"黒魔術師 ﾅｲﾄﾒｱ", "神殺しのｱｻﾞﾘｵｽ", "闇の管理人", "エディション", "クラス.h", "カネゴンバレー",
-			"砂岩ガン", "真夏の秋山", "真冬の春海", "ボンゴバナンザ", "ﾗｽﾄｵﾌﾞかねごん", "ﾘﾐﾃｯﾄﾞかねごん",
-			"Kanegon", "ﾀﾞｰｸﾈｽｽﾏｲﾙ", "水しぶき", "かねごん動詞", "かねごん殴って", "終焉のかねごん",
-			"雑草", "かん", "prism", "野菜", "厄災", "国王",
-			"あまよもぎ", "ぁびゃ", "ユウキ", "中央都市かねごん", "かねごん禁忌", "かねごん構成",
-			"カミヒデ", "カラムライア", "白川 大輔", "しずお", "1031", "Clover",
-			"ナンバーコア", "キラ", "カンナ", "忠犬", "79わ", "ひんやり茶",
-			"SML", "あ", "ああああああああ", "紫陽花", "ブーゲンビリア", "ﾀ",
-			"ツチノコ", "ワシじゃよ、ワシ", "強すぎて滅", "マリオネット", "人生楽観思考", "雪谷 久代"
-		};
+    DistributeInitialCards(isOnline);
+    AssignPlayerIDs(isOnline);
 
-		// AIの名前割り当て
-		std::shuffle(aiNames.begin(), aiNames.end(), engine);
+    data.currentTurnIdx = 0;
+    data.currentPhase = BattlePhase::Select;
 
-		int aiNameIdx = 0;
-		for (auto& p : data.Player_Turn) {
-			if (p.getControllerType() == ControllerType::AI) {
-				std::string candidate = aiNames[aiNameIdx];
-				aiNameIdx++;
-
-				// g_player(ゲームプレイヤー)と名前が被らないようにするロジック
-				if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
-					candidate = aiNames[aiNameIdx];
-					aiNameIdx++;
-				}
-				p.setName(candidate);
-			}
-		}
-
-		// ターン順をシャッフル
-		std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
-
-	}
-
-	// カード初期配布（ホストまたはオフラインのみ）
-	if (!isOnline || (isOnline && netManager->IsHost())) {
-		for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-			data.Player_Turn[i].Hand.Clear();
-			for (int c = 0; c < START_CARD; ++c) {
-				Card drawnCard = CardDB.GetRandomCard();
-				data.Player_Turn[i].Hand.Add(drawnCard);
-			}
-			data.Player_Turn[i].Hand.Sort();
-		}
-	}
-
-	// ==============================================================
-	// ★【重要修正】通信によるID割り当てを廃止し、直接IDを決定する
-	// ==============================================================
-	if (isOnline) {
-		if (netManager->IsHost()) {
-			localData.myPlayerIndex = 0; // ホストは確定で0
-			printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
-		}
-		else {
-			localData.myPlayerIndex = 1; // 2人対戦前提：クライアントは確定で1
-			printfDx("DEBUG: [INIT] I am Client. Assigned ID: 1\n");
-		}
-	}
-	else {
-		// オフライン用
-		localData.myPlayerIndex = 0;
-		for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-			if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
-				localData.myPlayerIndex = i;
-				break;
-			}
-		}
-	}
-
-	data.currentTurnIdx = 0;
-	data.currentPhase = BattlePhase::Select;
-
-	if (isOnline && netManager->IsHost()) {
-		data.isChanged = true;
-	}
+    if (isOnline && netManager->IsHost()) {
+        data.isChanged = true;
+    }
 }
 
+void BattleScene::SetupOfflineAI() {
+    // 乱数エンジンのセットアップ
+    std::random_device seed_gen;
+    std::mt19937 engine(seed_gen());
+
+    // AIの名前候補リスト
+    std::vector<std::string> aiNames = {
+        "ｼﾞﾝﾊﾞﾌﾞｴﾄﾞﾙ太郎", "ｷﾐﾉｶｾﾞﾊﾉﾄﾞｶﾗ", "カオスドゥラゴン", "破滅した世界", "アルコール", "ミセスタニシ",
+        "木下 明憲", "アンドロイド伊藤", "消しゴムｽﾚｲﾔｰ", "マスターゴリラ", "ミーティング次郎", "ﾏｲｹﾙ･ｼﾞｪｲｸｿﾝ",
+        "白川 真昼", "闇川 影虎", "森中 海導", "他人の鉛筆", "暴虐武人マン", "ナギナギ",
+        "清水一登太郎", "怪盗マラカス", "イグラドガネ", "コハクンチョス", "リンクカネゴン", "ネットワーク",
+        "System Error 404", "バチカン", "ブームブーム", "シャングリラ", "ｴﾝﾄﾞﾙｶﾈｺﾞﾝﾌｨｰﾙﾄﾞ", "アサアサ",
+        "アラスカの風", "ハリwood", "マーKING飛高", "謝罪サムライ", "GPT", "EDM", ".cpp",
+        "膝の上からｶﾝﾊﾟﾆｰ", "膝下ｽﾗｲﾃﾞｨﾝｸﾞ渉", "ワールドドリフ", ".h", "Destiny", "enum",
+        "心の歪み", "憎悪", "深淵の戦士 ｱｽﾛﾝ", "leading", "string.h", "using",
+        "黒魔術師 ﾅｲﾄﾒｱ", "神殺しのｱｻﾞﾘｵｽ", "闇の管理人", "エディション", "クラス.h", "カネゴンバレー",
+        "砂岩ガン", "真夏の秋山", "真冬の春海", "ボンゴバナンザ", "ﾗｽﾄｵﾌﾞかねごん", "ﾘﾐﾃｯﾄﾞかねごん",
+        "Kanegon", "ﾀﾞｰｸﾈｽｽﾏｲﾙ", "水しぶき", "かねごん動詞", "かねごん殴って", "終焉のかねごん",
+        "雑草", "かん", "prism", "野菜", "厄災", "国王",
+        "あまよもぎ", "ぁびゃ", "ユウキ", "中央都市かねごん", "かねごん禁忌", "かねごん構成",
+        "カミヒデ", "カラムライア", "白川 大輔", "しずお", "1031", "Clover",
+        "ナンバーコア", "キラ", "カンナ", "忠犬", "79わ", "ひんやり茶",
+        "SML", "あ", "ああああああああ", "紫陽花", "ブーゲンビリア", "ﾀ",
+        "ツチノコ", "ワシじゃよ、ワシ", "強すぎて滅", "マリオネット", "人生楽観思考", "雪谷 久代"
+    };
+
+    std::shuffle(aiNames.begin(), aiNames.end(), engine);
+
+    int aiNameIdx = 0;
+    for (auto& p : data.Player_Turn) {
+        if (p.getControllerType() == ControllerType::AI) {
+            std::string candidate = aiNames[aiNameIdx];
+            aiNameIdx++;
+            if (candidate == g_player.getName() && aiNameIdx < (int)aiNames.size()) {
+                candidate = aiNames[aiNameIdx];
+                aiNameIdx++;
+            }
+            p.setName(candidate);
+        }
+    }
+    std::shuffle(data.Player_Turn.begin(), data.Player_Turn.end(), engine);
+}
+
+void BattleScene::DistributeInitialCards(bool isOnline) {
+    if (!isOnline || (isOnline && netManager->IsHost())) {
+        for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+            data.Player_Turn[i].Hand.Clear();
+            for (int c = 0; c < START_CARD; ++c) {
+                Card drawnCard = CardDB.GetRandomCard();
+                data.Player_Turn[i].Hand.Add(drawnCard);
+            }
+            data.Player_Turn[i].Hand.Sort();
+        }
+    }
+}
+
+void BattleScene::AssignPlayerIDs(bool isOnline) {
+    if (isOnline) {
+        if (netManager->IsHost()) {
+            localData.myPlayerIndex = 0;
+            printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
+        }
+        else {
+            if (localData.myPlayerIndex < 0) {
+                localData.myPlayerIndex = 1; // ロビー処理移行時までの暫定
+            }
+            printfDx("DEBUG: [INIT] I am Client. My ID: %d\n", localData.myPlayerIndex);
+        }
+    }
+    else {
+        localData.myPlayerIndex = 0;
+        for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+            if (data.Player_Turn[i].getControllerType() == ControllerType::HUMAN) {
+                localData.myPlayerIndex = i;
+                break;
+            }
+        }
+    }
+}
+
+// ==========================================
+// 更新処理
+// ==========================================
 SceneName BattleScene::Update(const InputManager& input) {
-	bool isOnline = (netManager != nullptr && netManager->IsConnected());
+    bool isOnline = (netManager != nullptr && netManager->IsConnected());
 
-	if (isOnline) {
-		// =========================================================================
-		// ★【最重要修正】毎フレームネットワークの受信キューを更新する！
-		// これがないと、裏側で届いたパケットが packetQueue に入らず受信処理が一生回りません
-		// =========================================================================
-		netManager->Update();
+    // 1. ネットワーク受信処理
+    if (isOnline) {
+        netManager->Update();
+        HandleNetworkReceive();
+    }
 
-		GamePacket packet;
-		while (netManager->PopPacket(packet)) {
-			// 【全員共通】フェーズの強制同期
-			if (packet.type == (int)CommandType::SYNC_PHASE) {
-				data.currentPhase = static_cast<BattlePhase>(packet.value1);
-				localData.animFrame = 0;
-			}
+    // データ未準備なら待機
+    if (data.Player_Turn.empty() || localData.myPlayerIndex < 0 || localData.myPlayerIndex >= (int)data.Player_Turn.size()) {
+        return SceneName::BATTLE;
+    }
 
-			// 【ホスト側】クライアント（相手）からのカード決定アクションを受信
-			if (netManager->IsHost()) {
-				if (packet.type == (int)CommandType::CLIENT_ACTION) {
-					int clientId = packet.value3;
-					data.targetIdx = packet.value2;
+    // ホスト/クライアントに関わらず、必ずUIイベント（ポップアップ監視）を通す
+    // クライアントだけでなく、ホスト自身の画面でもHP監視を行う必要があるため
+    UpdateClientUIEvents();
 
-					// クライアントが「攻撃」を決定した時
-					if (data.currentPhase == BattlePhase::Select) {
-						data.confirmedAttackCards.clear();
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							if (packet.cardIds[c] != -1) {
-								data.confirmedAttackCards.push_back(packet.cardIds[c]);
-							}
-						}
-						data.currentPhase = BattlePhase::DefenseSelect; // 防御側選択フェーズへ移行
-						localData.animFrame = 0;
-						data.isChanged = true;
-					}
-					// クライアントが「防御」を決定した時
-					else if (data.currentPhase == BattlePhase::DefenseSelect) {
-						data.confirmedDefenseCards.clear();
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							if (packet.cardIds[c] != -1) {
-								data.confirmedDefenseCards.push_back(packet.cardIds[c]);
-							}
-						}
-						data.currentPhase = BattlePhase::DefenseReveal; // 結果発表フェーズへ移行
-						localData.animFrame = 0;
-						data.isChanged = true;
-					}
-				}
-			}
-			// 【クライアント側】ホストからの最新ゲーム状態の同期を受信
-			else {
-				if (packet.type == (int)CommandType::SYNC_GAME_DATA) {
-					int targetIdx = packet.value1;
+    // 3. ローカルの入力処理
+    Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
+    bool isMyTurn = (data.currentTurnIdx == localData.myPlayerIndex);
+    PlayerAction myAction = inputManager.Update(data, localData, input, myPlayer, localData.myPlayerIndex, isMyTurn);
 
-					while ((int)data.Player_Turn.size() <= targetIdx) {
-						data.Player_Turn.emplace_back();
-					}
+    if (myAction.isSurrender) return SceneName::SELECT;
 
-					data.Player_Turn[targetIdx].setHp(packet.value2);
-					data.currentTurnIdx = packet.value3;
-					data.currentPhase = static_cast<BattlePhase>(packet.value4);
-					data.targetIdx = packet.value5;
+    // 4. アクションの反映（送信または直接適用）
+    ProcessPlayerAction(myAction, isOnline);
 
-					// ★【新方式】フェーズ連動型同期（インデックスのズレ、バグを100%防止）
-					// 攻撃フェーズまたは防御選択フェーズなら、送られてきたのは「攻撃カード」
-					if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::DefenseSelect) {
-						data.confirmedAttackCards.clear();
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							int cardId = packet.cardIds[c];
-							if (cardId != -1) data.confirmedAttackCards.push_back(cardId);
-						}
-						data.confirmedDefenseCards.clear(); // まだ防御前なのでクリア
-					}
-					// それ以降のフェーズなら、送られてきたのは「防御カード」
-					else {
-						data.confirmedDefenseCards.clear();
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							int cardId = packet.cardIds[c];
-							if (cardId != -1) data.confirmedDefenseCards.push_back(cardId);
-						}
-					}
-				}
-				else if (packet.type == (int)CommandType::SYNC_PRIVATE_HAND) {
-					int targetIdx = packet.value1;
+    // 5. ゲームロジック進行と同期送信（ホストまたはオフライン時）
+    if (!isOnline || netManager->IsHost()) {
+        UpdateHostLogicAndSync();
+    }
 
-					// ★【重要修正】自分だけでなく「相手の手札」も強制的に同期するように変更！
-					// これにより、UI描画マネージャー（uiManager）が相手の手札（裏向き画像や枚数）を画面に正しく描画できるようになります。
-					if (targetIdx >= 0) {
-						while ((int)data.Player_Turn.size() <= targetIdx) {
-							data.Player_Turn.emplace_back();
-						}
-
-						data.Player_Turn[targetIdx].Hand.Clear();
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							int cardId = packet.cardIds[c];
-							if (cardId >= 0 && cardId < CARD_KIND) {
-								data.Player_Turn[targetIdx].Hand.Add(CardDB.GetCardByID(cardId));
-							}
-						}
-						data.Player_Turn[targetIdx].Hand.Sort();
-					}
-				}
-			}
-		}
-	}
-
-	// プレイヤーデータ準備チェック（ガード節）
-	if (data.Player_Turn.empty() || localData.myPlayerIndex < 0 || localData.myPlayerIndex >= (int)data.Player_Turn.size()) {
-		return SceneName::BATTLE;
-	}
-
-	// ローカルプレイヤーの入力処理
-	Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
-	bool isMyTurn = (data.currentTurnIdx == localData.myPlayerIndex);
-
-	PlayerAction myAction = inputManager.Update(data, localData, input, myPlayer, localData.myPlayerIndex, isMyTurn);
-	if (myAction.isSurrender) return SceneName::SELECT;
-
-	// アクション送信 / ホストのゲーム進行処理
-	if (isOnline) {
-		if (myAction.hasAction) {
-			// 【ホスト自身が操作して決定した場合】
-			if (netManager->IsHost()) {
-				if (myAction.isAttackDecision) {
-					// ホストが選んだ攻撃カードを確定枠に直接反映
-					data.confirmedAttackCards.clear();
-					for (int cardId : myAction.selectedCardIdxs) {
-						data.confirmedAttackCards.push_back(cardId);
-					}
-					data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
-					localData.animFrame = 0;
-					data.isChanged = true;
-				}
-				else if (myAction.isDefenseDecision) {
-					// ホストが選んだ防御カードを確定枠に直接反映
-					data.confirmedDefenseCards.clear();
-					for (int cardId : myAction.selectedCardIdxs) {
-						data.confirmedDefenseCards.push_back(cardId);
-					}
-					data.currentPhase = BattlePhase::DefenseReveal;
-					localData.animFrame = 0;
-					data.isChanged = true;
-				}
-			}
-			// 【クライアントが操作して決定した場合】ホストへパケットを送信
-			else {
-				if (myAction.isAttackDecision || myAction.isDefenseDecision) {
-					GamePacket actionPacket;
-					memset(&actionPacket, 0, sizeof(GamePacket));
-					actionPacket.type = (int)CommandType::CLIENT_ACTION;
-					actionPacket.value2 = myAction.targetIdx;
-					actionPacket.value3 = localData.myPlayerIndex;
-
-					for (int c = 0; c < MAX_HAND_CARD; ++c) {
-						if (c < (int)myAction.selectedCardIdxs.size()) {
-							actionPacket.cardIds[c] = myAction.selectedCardIdxs[c];
-						}
-						else {
-							actionPacket.cardIds[c] = -1;
-						}
-					}
-					netManager->SendPacket(actionPacket);
-				}
-			}
-		}
-
-		// 【ホスト側限定】ゲーム状態の自動更新と、全クライアントへのデータ定期送信
-		if (netManager->IsHost()) {
-			BattlePhase oldPhase = data.currentPhase;
-			int oldTurnIdx = data.currentTurnIdx;
-			int oldTargetIdx = data.targetIdx;
-			std::vector<int> oldHps(data.Player_Turn.size());
-			for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
-				oldHps[i] = data.Player_Turn[i].getHp();
-			}
-
-			logicManager.Update(data, localData);
-			aiManager.Update(data);
-
-			// 状態の変化を検知
-			if (data.currentPhase != oldPhase || data.currentTurnIdx != oldTurnIdx || data.targetIdx != oldTargetIdx) {
-				data.isChanged = true;
-			}
-			for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
-				if (data.Player_Turn[i].getHp() != oldHps[i]) {
-					data.isChanged = true;
-				}
-			}
-
-			// 定期送信タイマー（30フレームに1回強制同期）
-			static int autoSyncTimer = 0;
-			autoSyncTimer++;
-			if (autoSyncTimer >= 30) {
-				data.isChanged = true;
-				autoSyncTimer = 0;
-			}
-
-			// データに変更があった場合、全員へブロードキャスト
-			if (data.isChanged) {
-				// 1. 基本ゲームデータと「場に出たカード」の送信
-				for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-					GamePacket syncDataPacket;
-					memset(&syncDataPacket, 0, sizeof(GamePacket));
-
-					syncDataPacket.type = (int)CommandType::SYNC_GAME_DATA;
-					syncDataPacket.value1 = i;
-					syncDataPacket.value2 = data.Player_Turn[i].getHp();
-					syncDataPacket.value3 = data.currentTurnIdx;
-					syncDataPacket.value4 = (int)data.currentPhase;
-					syncDataPacket.value5 = data.targetIdx;
-
-					// ★【新方式】現在のフェーズに合わせて、cardIds配列(0?MAX)を安全に使い分ける
-					if (data.currentPhase == BattlePhase::Select || data.currentPhase == BattlePhase::DefenseSelect) {
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							syncDataPacket.cardIds[c] = (c < (int)data.confirmedAttackCards.size()) ? data.confirmedAttackCards[c] : -1;
-						}
-					}
-					else {
-						for (int c = 0; c < MAX_HAND_CARD; ++c) {
-							syncDataPacket.cardIds[c] = (c < (int)data.confirmedDefenseCards.size()) ? data.confirmedDefenseCards[c] : -1;
-						}
-					}
-
-					netManager->BroadcastPacket(syncDataPacket);
-				}
-
-				// 2. 手札データの送信
-				for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-					GamePacket handPacket;
-					memset(&handPacket, 0, sizeof(GamePacket));
-
-					handPacket.type = (int)CommandType::SYNC_PRIVATE_HAND;
-					handPacket.value1 = i;
-
-					const auto& handCards = data.Player_Turn[i].Hand.GetCards();
-					for (int c = 0; c < MAX_HAND_CARD; ++c) {
-						if (c < (int)handCards.size()) {
-							handPacket.cardIds[c] = handCards[c].GetID();
-						}
-						else {
-							handPacket.cardIds[c] = -1;
-						}
-					}
-					netManager->BroadcastPacket(handPacket);
-				}
-
-				data.isChanged = false;
-			}
-		}
-	}
-	else {
-		// オフライン（AI対戦）の従来処理
-		if (myAction.hasAction) {
-			if (myAction.isAttackDecision) {
-				data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
-				localData.animFrame = 0;
-			}
-			else if (myAction.isDefenseDecision) {
-				data.currentPhase = BattlePhase::DefenseReveal;
-			}
-		}
-		aiManager.Update(data);
-		logicManager.Update(data, localData);
-	}
-
-	return SceneName::BATTLE;
+    return SceneName::BATTLE;
 }
 
+// ==========================================
+// リファクタリング関数群 (Update内部処理)
+// ==========================================
+void BattleScene::HandleNetworkReceive() {
+    GamePacket packet;
+    while (netManager->PopPacket(packet)) {
+        if (packet.type == (int)CommandType::SYNC_PHASE) {
+            data.currentPhase = static_cast<BattlePhase>(packet.value1);
+            localData.animFrame = 0;
+        }
+
+        if (netManager->IsHost() && packet.type == (int)CommandType::CLIENT_ACTION) {
+            ProcessClientAction(packet);
+        }
+        else if (!netManager->IsHost()) {
+            ProcessHostSyncData(packet);
+        }
+    }
+}
+
+void BattleScene::ProcessClientAction(const GamePacket& packet) {
+    int clientId = packet.value3;
+
+    if (data.currentPhase == BattlePhase::Select && clientId == data.currentTurnIdx) {
+        data.targetIdx = packet.value2;
+        data.confirmedAttackCards.clear();
+        for (int c = 0; c < MAX_HAND_CARD; ++c) {
+            if (packet.playedCardIds[c] != -1) {
+                data.confirmedAttackCards.push_back(packet.playedCardIds[c]);
+            }
+        }
+
+        // ★修正: クライアントからのアクションがヒール行動だった場合、DefenseSelectを飛ばす
+        bool isHeal = (packet.value1 == 1);
+        data.currentPhase = isHeal ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+
+        localData.animFrame = 0;
+        data.isChanged = true;
+    }
+    else if (data.currentPhase == BattlePhase::DefenseSelect && clientId == data.targetIdx) {
+        data.confirmedDefenseCards.clear();
+        for (int c = 0; c < MAX_HAND_CARD; ++c) {
+            if (packet.playedCardIds[c] != -1) {
+                data.confirmedDefenseCards.push_back(packet.playedCardIds[c]);
+            }
+        }
+        data.currentPhase = BattlePhase::DefenseReveal;
+        localData.animFrame = 0;
+        data.isChanged = true;
+    }
+}
+
+void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
+    if (packet.type == (int)CommandType::SYNC_GAME_DATA) {
+        // --- デバッグログを追加 ---
+        printfDx("DEBUG: [CLIENT] Received Sync: Phase=%d, AtkCard[0]=%d\n", packet.value4, packet.playedCardIds[0]);
+
+        int targetIdx = packet.value1;
+        while ((int)data.Player_Turn.size() <= targetIdx) {
+            data.Player_Turn.emplace_back();
+            prevHps.push_back(0);
+        }
+
+        data.Player_Turn[targetIdx].setHp(packet.value2);
+        data.currentTurnIdx = packet.value3;
+        data.currentPhase = static_cast<BattlePhase>(packet.value4);
+        data.targetIdx = packet.value5;
+
+        // ★修正: targetIdx == 0 の条件を削除。
+        // パケットが来るたびに常に最新の場札（グローバル情報）で上書きして同期ズレを防ぐ
+        data.confirmedAttackCards.clear();
+        data.confirmedDefenseCards.clear();
+        for (int c = 0; c < MAX_HAND_CARD; ++c) {
+            if (packet.playedCardIds[c] != -1) data.confirmedAttackCards.push_back(packet.playedCardIds[c]);
+            if (packet.cardIds[c] != -1)       data.confirmedDefenseCards.push_back(packet.cardIds[c]);
+        }
+
+        // 反映されたか確認
+        printfDx("DEBUG: [CLIENT] Updated: AtkCards size=%d\n", (int)data.confirmedAttackCards.size());
+    }
+    else if (packet.type == (int)CommandType::SYNC_PRIVATE_HAND) {
+        int targetIdx = packet.value1;
+        if (targetIdx >= 0) {
+            // ★【修正】手札非表示バグの解消
+            // ホストは「そのクライアント自身の手札」しか送ってこないため、
+            // ここで届いた targetIdx が「クライアント自身の正しいプレイヤーID」になります。
+            if (localData.myPlayerIndex != targetIdx) {
+                localData.myPlayerIndex = targetIdx;
+            }
+
+            while ((int)data.Player_Turn.size() <= targetIdx) {
+                data.Player_Turn.emplace_back();
+            }
+            data.Player_Turn[targetIdx].Hand.Clear();
+            for (int c = 0; c < MAX_HAND_CARD; ++c) {
+                int cardId = packet.cardIds[c];
+                if (cardId >= 0 && cardId < CARD_KIND) {
+                    data.Player_Turn[targetIdx].Hand.Add(CardDB.GetCardByID(cardId));
+                }
+            }
+            data.Player_Turn[targetIdx].Hand.Sort();
+        }
+    }
+}
+
+void BattleScene::UpdateClientUIEvents() {
+    // 1. プレイヤー数が変更された場合の初期化
+    if (prevHps.size() != data.Player_Turn.size()) {
+        prevHps.resize(data.Player_Turn.size());
+        for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
+            prevHps[i] = data.Player_Turn[i].getHp();
+        }
+        return;
+    }
+
+    // 2. タイマー減少処理（前述の通り）
+    auto& popups = localData.popups;
+    for (auto it = popups.begin(); it != popups.end(); ) {
+        it->timer--;
+        if (it->timer <= 0) it = popups.erase(it);
+        else ++it;
+    }
+
+    // 3. HP変動の検知とポップアップ生成
+    for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
+        int currentHp = data.Player_Turn[i].getHp();
+
+        // 差分が発生している場合のみ処理
+        if (currentHp != prevHps[i]) {
+            int diff = prevHps[i] - currentHp;
+
+            if (diff > 0) {
+                // メインダメージ：GetPopupTextを使用して文字列を取得
+                localData.popups.emplace_back(PopupType::Damage, (int)i, UIHelper::GetPopupText(PopupType::Damage, diff), 60, 0);
+
+                // 闇属性の追加ダメージ
+                if (data.isLastAttackDark) {
+                    int yamiDama = (int)(diff * 0.5f);
+                    // ここもGetPopupTextを通す
+                    localData.popups.emplace_back(PopupType::YamiDama, (int)i, UIHelper::GetPopupText(PopupType::YamiDama, yamiDama), 60, 30);
+
+                    data.isLastAttackDark = false; // 表示したらリセット
+                }
+            }
+            else if (diff < 0) {
+                // 回復：GetPopupTextを使用
+                localData.popups.emplace_back(PopupType::Heal, (int)i, UIHelper::GetPopupText(PopupType::Heal, -diff), 60, 0);
+            }
+            prevHps[i] = currentHp;
+        }
+    }
+}
+
+void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnline) {
+    if (!myAction.hasAction) return;
+
+    if (isOnline) {
+        if (netManager->IsHost()) {
+            if (myAction.isAttackDecision) {
+                data.confirmedAttackCards.clear();
+                for (int cardId : myAction.selectedCardIdxs) data.confirmedAttackCards.push_back(cardId);
+                data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+                localData.animFrame = 0;
+                data.isChanged = true;
+            }
+            else if (myAction.isDefenseDecision) {
+                data.confirmedDefenseCards.clear();
+                for (int cardId : myAction.selectedCardIdxs) data.confirmedDefenseCards.push_back(cardId);
+                data.currentPhase = BattlePhase::DefenseReveal;
+                localData.animFrame = 0;
+                data.isChanged = true;
+            }
+        }
+        else {
+            if (myAction.isAttackDecision || myAction.isDefenseDecision) {
+                GamePacket actionPacket;
+                memset(&actionPacket, 0, sizeof(GamePacket));
+                actionPacket.type = (int)CommandType::CLIENT_ACTION;
+
+                // ★修正: クライアントのアクションが「ヒール」などの補助かを value1 に乗せて送る
+                actionPacket.value1 = myAction.isHealAction ? 1 : 0;
+
+                actionPacket.value2 = myAction.targetIdx;
+                actionPacket.value3 = localData.myPlayerIndex;
+
+                for (int c = 0; c < MAX_HAND_CARD; ++c) {
+                    actionPacket.playedCardIds[c] = (c < (int)myAction.selectedCardIdxs.size()) ? myAction.selectedCardIdxs[c] : -1;
+                }
+                netManager->SendPacket(actionPacket);
+            }
+        }
+    }
+    else {
+        // オフライン処理
+        if (myAction.isAttackDecision) {
+            data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
+            localData.animFrame = 0;
+        }
+        else if (myAction.isDefenseDecision) {
+            data.currentPhase = BattlePhase::DefenseReveal;
+        }
+    }
+}
+
+void BattleScene::UpdateHostLogicAndSync() {
+    BattlePhase oldPhase = data.currentPhase;
+    int oldTurnIdx = data.currentTurnIdx;
+    int oldTargetIdx = data.targetIdx;
+
+    std::vector<int> oldHps(data.Player_Turn.size());
+    for (size_t i = 0; i < data.Player_Turn.size(); ++i) oldHps[i] = data.Player_Turn[i].getHp();
+
+    logicManager.Update(data, localData);
+    aiManager.Update(data);
+
+    if (data.currentPhase != oldPhase || data.currentTurnIdx != oldTurnIdx || data.targetIdx != oldTargetIdx) {
+        data.isChanged = true;
+    }
+    for (size_t i = 0; i < data.Player_Turn.size(); ++i) {
+        if (data.Player_Turn[i].getHp() != oldHps[i]) data.isChanged = true;
+    }
+
+    static int autoSyncTimer = 0;
+    autoSyncTimer++;
+    if (autoSyncTimer >= 30) {
+        data.isChanged = true;
+        autoSyncTimer = 0;
+    }
+
+    // 通信対戦時のみ同期パケット送信
+    if (netManager != nullptr && netManager->IsConnected() && data.isChanged) {
+
+        // 1. 基本ゲームデータと「場に出たカード」の送信
+        for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+            GamePacket syncDataPacket;
+            // 構造体のメンバを手動で初期化（memset禁止）
+            syncDataPacket.type = (int)CommandType::SYNC_GAME_DATA;
+            syncDataPacket.value1 = i;
+            syncDataPacket.value2 = data.Player_Turn[i].getHp();
+            syncDataPacket.value3 = data.currentTurnIdx;
+            syncDataPacket.value4 = (int)data.currentPhase;
+            syncDataPacket.value5 = data.targetIdx;
+
+            // カードの初期化
+            for (int c = 0; c < MAX_HAND_CARD; ++c) {
+                syncDataPacket.playedCardIds[c] = (c < (int)data.confirmedAttackCards.size()) ? data.confirmedAttackCards[c] : -1;
+                syncDataPacket.cardIds[c] = (c < (int)data.confirmedDefenseCards.size()) ? data.confirmedDefenseCards[c] : -1;
+            }
+            netManager->BroadcastPacket(syncDataPacket);
+        }
+
+        // 2. 手札データの送信（★Broadcastから個別のSendPacketToに修正）
+        const auto& clientHandles = netManager->GetClientHandles();
+        for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
+            GamePacket handPacket;
+            memset(&handPacket, 0, sizeof(GamePacket));
+
+            handPacket.type = (int)CommandType::SYNC_PRIVATE_HAND;
+            handPacket.value1 = i;
+
+            const auto& handCards = data.Player_Turn[i].Hand.GetCards();
+            for (int c = 0; c < MAX_HAND_CARD; ++c) {
+                handPacket.cardIds[c] = (c < (int)handCards.size()) ? handCards[c].GetID() : -1;
+            }
+
+            // ホスト自身（ID=0）へは送る必要がなく、クライアントのみに個別送信する
+            if (i > 0 && (i - 1) < (int)clientHandles.size()) {
+                netManager->SendPacketTo(clientHandles[i - 1], handPacket);
+            }
+        }
+        data.isChanged = false;
+    }
+}
+
+// ==========================================
+// 描画処理 
+// ==========================================
 void BattleScene::Draw() const {
-	if (localData.myPlayerIndex < 0) {
-		DrawString(100, 100, "Waiting for Connection...", Col.GetBla());
-		return;
-	}
+    if (localData.myPlayerIndex < 0) {
+        DrawString(100, 100, "Waiting for Connection...", Col.GetBla());
+        return;
+    }
 
-	// 画面全体のメインUI描画
-	uiManager.Draw(data, localData);
+    uiManager.Draw(data, localData);
 
-	// デバッグ用情報の描画（不具合が完全に直ったらこの数行は消して大丈夫です）
-	int whiteCol = GetColor(255, 255, 255);
-	DrawFormatString(10, 150, whiteCol, "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
-		(int)data.confirmedAttackCards.size(),
-		(int)data.confirmedDefenseCards.size(),
-		(int)data.currentPhase);
+    DrawFormatString(10, 150, Col.GetBla(), "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
+        (int)data.confirmedAttackCards.size(),
+        (int)data.confirmedDefenseCards.size(),
+        (int)data.currentPhase);
 }

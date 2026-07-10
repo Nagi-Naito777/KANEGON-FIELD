@@ -31,7 +31,6 @@ class BattleUIManager
 public:
     // ‘S‘Ì‚Ì•`‰æ‚ğŠÇ—‚·‚é‘‹Œû
     void Draw(const BattleData& data, const LocalClientData& local) const;
-
 private:
 
     // ‘®«‚ÌFˆ—ŠÖ”

@@ -89,6 +89,8 @@ private:
     int m_curyel; // カーソルが重なった時の黄色
     int m_boxyel; // テキストボックスUIの背景の黄色
     int m_sky;    // 水色
+    int m_healgre;// 回復ポップアップ用の緑
+    int m_damred; // ダメージポップアップ用の赤
 public:
     // コンストラクタ
     ColorManager()
@@ -102,6 +104,8 @@ public:
         , m_curyel(0)
         , m_boxyel(0)
         , m_sky(0)
+        , m_damred(0)
+        , m_healgre(0)
     {}
 
     // 初期化処理
@@ -116,6 +120,8 @@ public:
         m_curyel = GetColor(255, 255, 100);
         m_boxyel = GetColor(255, 255, 200);
         m_sky = GetColor(0, 255, 255);
+        m_healgre = GetColor(0, 0, 255);
+        m_damred = GetColor(100, 0, 0);
     }
 
     // ゲッター関数
@@ -129,6 +135,8 @@ public:
     int GetCurYel()const { return m_curyel; }
     int GetBoxYel()const { return m_boxyel; }
     int GetSky() const { return m_sky; }
+    int GetHealGre()const { return m_healgre; }
+    int GetDamRed()const { return m_damred; }
 };
 
 extern ColorManager Col;
