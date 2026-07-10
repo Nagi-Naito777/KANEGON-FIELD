@@ -31,7 +31,7 @@ std::vector<Player> BrawlLobbyScene::GetBattlePlayers() const {
         players.push_back(p);
     }
 
-    printfDx("DEBUG: BrawlLobbyScene Returning %d players\n", (int)players.size());
+    //printfDx("DEBUG: BrawlLobbyScene Returning %d players\n", (int)players.size());
     return players;
 }
 
@@ -236,7 +236,7 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                     return SceneName::BATTLE;
                 }
                 else {
-                    printfDx("チームが偏っているか、人数が不足しています\n");
+                    //printfDx("チームが偏っているか、人数が不足しています\n");
                 }
             }
 
@@ -303,12 +303,12 @@ SceneName BrawlLobbyScene::Update(const InputManager& input) {
                 if (isHoverIdx[BTN_HOST]) {
                     isHost = true; // 自分がホストであることを記憶
                     netManager->StartHost(9850);
-                    printfDx("ホスト待機を開始しました\n");
+                    //printfDx("ホスト待機を開始しました\n");
                 }
                 if (isHoverIdx[BTN_CLIENT]) {
                     isHost = false; // クライアントであることを記憶
                     netManager->ConnectAsClient("127.0.0.1", 9850);
-                    printfDx("接続を試みます...\n");
+                    //printfDx("接続を試みます...\n");
                 }
             }
         }

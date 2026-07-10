@@ -120,7 +120,7 @@ public:
         m_curyel = GetColor(255, 255, 100);
         m_boxyel = GetColor(255, 255, 200);
         m_sky = GetColor(0, 255, 255);
-        m_healgre = GetColor(0, 0, 255);
+        m_healgre = GetColor(0, 255, 0);
         m_damred = GetColor(100, 0, 0);
     }
 

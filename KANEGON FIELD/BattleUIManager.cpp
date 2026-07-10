@@ -21,7 +21,7 @@ void BattleUIManager::Draw(const BattleData& data, const LocalClientData& local)
     // 追記：ここが 3 になっているか確認！
     static int lastCount = 0;
     if ((int)data.Player_Turn.size() != lastCount) {
-        printfDx("DEBUG: Current Player Count: %d\n", (int)data.Player_Turn.size());
+        //printfDx("DEBUG: Current Player Count: %d\n", (int)data.Player_Turn.size());
         lastCount = (int)data.Player_Turn.size();
     }
 
@@ -803,7 +803,7 @@ void BattleUIManager::DrawPopups(const BattleData& data, const LocalClientData& 
         case PopupType::MagicHeal:boxCol = Col.GetBlu(); break;
         case PopupType::Money:    boxCol = Col.GetYel(); break; 
         case PopupType::Parry:    boxCol = 0xD4AF37; break; // 金色
-        case PopupType::Counter:  boxCol = 0x660022; break; // ピンク
+        case PopupType::Counter:  boxCol = 0x660022; break; // ピンク 
         default:                  boxCol = 0x555555; break;
         }
 

@@ -252,14 +252,15 @@ public:
 	static std::string GetPopupText(PopupType type, int value) {
 		switch (type) {
 		case PopupType::Damage:    return std::to_string(value) + " ダメージ";
-		case PopupType::YamiDama:  return "闇追加 " + std::to_string(value);
+		case PopupType::YamiDama:  return std::to_string(value) + " ダメージ";
 		case PopupType::Heal:      return "HP+ " + std::to_string(value);
 		case PopupType::MagicHeal: return "MP+ " + std::to_string(value);
 		case PopupType::Money:     return "￥+ " + std::to_string(value);
 		case PopupType::Counter:   return "跳ね返す";
-		case PopupType::Parry:     return "弾いた！";
-		case PopupType::NoHit:     return "止めた";
+		case PopupType::Parry:     return "弾いた";
+		case PopupType::Clear:     return "止めた";
 		case PopupType::NoDamage:  return "無傷";
+		case PopupType::Hit:	   return "命中";
 		default:                   return std::to_string(value);
 		}
 	}

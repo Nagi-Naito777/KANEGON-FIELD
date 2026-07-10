@@ -141,7 +141,6 @@
     <ClCompile Include="Card.cpp" />
     <ClCompile Include="CardDatabase.cpp" />
     <ClCompile Include="DamageResult.cpp" />
-    <ClCompile Include="GameContext.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetworkManager.cpp" />
@@ -167,7 +166,6 @@
     <ClInclude Include="CardDatabase.h" />
     <ClInclude Include="DamageResult.h" />
     <ClInclude Include="GameConfig.h" />
-    <ClInclude Include="GameContext.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InterfaceScene.h" />
     <ClInclude Include="NetworkManager.h" />

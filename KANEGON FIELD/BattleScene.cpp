@@ -42,7 +42,7 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 
 	// オンラインかどうかを判定
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
-	printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
+	//printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
 
 	// --- AI対戦（オフライン）の時だけ実行する処理 ---
     if (!isOnline) {
@@ -120,13 +120,13 @@ void BattleScene::AssignPlayerIDs(bool isOnline) {
     if (isOnline) {
         if (netManager->IsHost()) {
             localData.myPlayerIndex = 0;
-            printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
+            //printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
         }
         else {
             if (localData.myPlayerIndex < 0) {
                 localData.myPlayerIndex = 1; // ロビー処理移行時までの暫定
             }
-            printfDx("DEBUG: [INIT] I am Client. My ID: %d\n", localData.myPlayerIndex);
+            //printfDx("DEBUG: [INIT] I am Client. My ID: %d\n", localData.myPlayerIndex);
         }
     }
     else {
@@ -233,9 +233,6 @@ void BattleScene::ProcessClientAction(const GamePacket& packet) {
 
 void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
     if (packet.type == (int)CommandType::SYNC_GAME_DATA) {
-        // --- デバッグログを追加 ---
-        printfDx("DEBUG: [CLIENT] Received Sync: Phase=%d, AtkCard[0]=%d\n", packet.value4, packet.playedCardIds[0]);
-
         int targetIdx = packet.value1;
         while ((int)data.Player_Turn.size() <= targetIdx) {
             data.Player_Turn.emplace_back();
@@ -244,7 +241,16 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
 
         data.Player_Turn[targetIdx].setHp(packet.value2);
         data.currentTurnIdx = packet.value3;
-        data.currentPhase = static_cast<BattlePhase>(packet.value4);
+
+        // ▼▼▼ 追加・修正箇所 ▼▼▼
+        // フェーズの変更を検知し、切り替わっていたらアニメーションフレームをリセットする
+        BattlePhase newPhase = static_cast<BattlePhase>(packet.value4);
+        if (data.currentPhase != newPhase) {
+            data.currentPhase = newPhase;
+            localData.animFrame = 0;
+        }
+        // ▲▲▲ ここまで ▲▲▲
+
         data.targetIdx = packet.value5;
 
         // ★修正: targetIdx == 0 の条件を削除。
@@ -255,9 +261,6 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
             if (packet.playedCardIds[c] != -1) data.confirmedAttackCards.push_back(packet.playedCardIds[c]);
             if (packet.cardIds[c] != -1)       data.confirmedDefenseCards.push_back(packet.cardIds[c]);
         }
-
-        // 反映されたか確認
-        printfDx("DEBUG: [CLIENT] Updated: AtkCards size=%d\n", (int)data.confirmedAttackCards.size());
     }
     else if (packet.type == (int)CommandType::SYNC_PRIVATE_HAND) {
         int targetIdx = packet.value1;
@@ -354,19 +357,24 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
         }
         else {
             if (myAction.isAttackDecision || myAction.isDefenseDecision) {
-                GamePacket actionPacket;
-                memset(&actionPacket, 0, sizeof(GamePacket));
+                // 【修正】memsetを廃止し、C++のゼロ初期化 {} を使用
+                GamePacket actionPacket{};
                 actionPacket.type = (int)CommandType::CLIENT_ACTION;
-
-                // ★修正: クライアントのアクションが「ヒール」などの補助かを value1 に乗せて送る
                 actionPacket.value1 = myAction.isHealAction ? 1 : 0;
-
                 actionPacket.value2 = myAction.targetIdx;
                 actionPacket.value3 = localData.myPlayerIndex;
 
+                // 【修正】配列全体を明示的に -1 (空) で初期化し、ゴミデータを防ぐ
                 for (int c = 0; c < MAX_HAND_CARD; ++c) {
-                    actionPacket.playedCardIds[c] = (c < (int)myAction.selectedCardIdxs.size()) ? myAction.selectedCardIdxs[c] : -1;
+                    actionPacket.playedCardIds[c] = -1;
+                    actionPacket.cardIds[c] = -1;
                 }
+
+                // 選択されたカードIDを格納
+                for (size_t c = 0; c < myAction.selectedCardIdxs.size() && c < MAX_HAND_CARD; ++c) {
+                    actionPacket.playedCardIds[c] = myAction.selectedCardIdxs[c];
+                }
+
                 netManager->SendPacket(actionPacket);
             }
         }
@@ -413,8 +421,8 @@ void BattleScene::UpdateHostLogicAndSync() {
 
         // 1. 基本ゲームデータと「場に出たカード」の送信
         for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-            GamePacket syncDataPacket;
-            // 構造体のメンバを手動で初期化（memset禁止）
+            // 【修正】未初期化変数を防ぐため {} を付与
+            GamePacket syncDataPacket{};
             syncDataPacket.type = (int)CommandType::SYNC_GAME_DATA;
             syncDataPacket.value1 = i;
             syncDataPacket.value2 = data.Player_Turn[i].getHp();
@@ -422,29 +430,41 @@ void BattleScene::UpdateHostLogicAndSync() {
             syncDataPacket.value4 = (int)data.currentPhase;
             syncDataPacket.value5 = data.targetIdx;
 
-            // カードの初期化
+            // 【修正】配列全体を明示的に -1 (空) で初期化
             for (int c = 0; c < MAX_HAND_CARD; ++c) {
-                syncDataPacket.playedCardIds[c] = (c < (int)data.confirmedAttackCards.size()) ? data.confirmedAttackCards[c] : -1;
-                syncDataPacket.cardIds[c] = (c < (int)data.confirmedDefenseCards.size()) ? data.confirmedDefenseCards[c] : -1;
+                syncDataPacket.playedCardIds[c] = -1;
+                syncDataPacket.cardIds[c] = -1;
+            }
+
+            // カードの詰め込み
+            for (size_t c = 0; c < data.confirmedAttackCards.size() && c < MAX_HAND_CARD; ++c) {
+                syncDataPacket.playedCardIds[c] = data.confirmedAttackCards[c];
+            }
+            for (size_t c = 0; c < data.confirmedDefenseCards.size() && c < MAX_HAND_CARD; ++c) {
+                syncDataPacket.cardIds[c] = data.confirmedDefenseCards[c];
             }
             netManager->BroadcastPacket(syncDataPacket);
         }
 
-        // 2. 手札データの送信（★Broadcastから個別のSendPacketToに修正）
+        // 2. 手札データの送信
         const auto& clientHandles = netManager->GetClientHandles();
         for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-            GamePacket handPacket;
-            memset(&handPacket, 0, sizeof(GamePacket));
-
+            // 【修正】ここでも memset を廃止し、{} 初期化を使用
+            GamePacket handPacket{};
             handPacket.type = (int)CommandType::SYNC_PRIVATE_HAND;
             handPacket.value1 = i;
 
-            const auto& handCards = data.Player_Turn[i].Hand.GetCards();
+            // 【修正】配列全体を明示的に -1 (空) で初期化
             for (int c = 0; c < MAX_HAND_CARD; ++c) {
-                handPacket.cardIds[c] = (c < (int)handCards.size()) ? handCards[c].GetID() : -1;
+                handPacket.cardIds[c] = -1;
+                handPacket.playedCardIds[c] = -1;
             }
 
-            // ホスト自身（ID=0）へは送る必要がなく、クライアントのみに個別送信する
+            const auto& handCards = data.Player_Turn[i].Hand.GetCards();
+            for (size_t c = 0; c < handCards.size() && c < MAX_HAND_CARD; ++c) {
+                handPacket.cardIds[c] = handCards[c].GetID();
+            }
+
             if (i > 0 && (i - 1) < (int)clientHandles.size()) {
                 netManager->SendPacketTo(clientHandles[i - 1], handPacket);
             }
@@ -458,14 +478,14 @@ void BattleScene::UpdateHostLogicAndSync() {
 // ==========================================
 void BattleScene::Draw() const {
     if (localData.myPlayerIndex < 0) {
-        DrawString(100, 100, "Waiting for Connection...", Col.GetBla());
+        //DrawString(100, 100, "Waiting for Connection...", Col.GetBla());
         return;
     }
 
     uiManager.Draw(data, localData);
 
-    DrawFormatString(10, 150, Col.GetBla(), "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
+    /*DrawFormatString(10, 150, Col.GetBla(), "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
         (int)data.confirmedAttackCards.size(),
         (int)data.confirmedDefenseCards.size(),
-        (int)data.currentPhase);
+        (int)data.currentPhase);*/
 }
