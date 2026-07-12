@@ -262,7 +262,7 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
 
         data.targetIdx = packet.value5;
 
-        // 【修正】パケットから流れてくるカードID(固有ID)をもとに、CardDBから実体を取得して再構築
+        // パケットから流れてくるカードID(固有ID)をもとに、CardDBから実体を取得して再構築
         data.confirmedAttackCards.clear();
         data.confirmedDefenseCards.clear();
         for (int c = 0; c < MAX_HAND_CARD; ++c) {
@@ -273,6 +273,28 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
                 data.confirmedDefenseCards.push_back(CardDB.GetCardByID(packet.cardIds[c]));
             }
         }
+
+        // ========================================================
+        // 【追加】ここでクライアント側でも合計攻撃力・防御力・属性を復元する
+        // ========================================================
+        data.attackTotalPower = 0;
+        for (const auto& card : data.confirmedAttackCards) {
+            data.attackTotalPower += card.GetPower();
+        }
+
+        if (!data.confirmedAttackCards.empty()) {
+            // メンバ変数の logicManager を使って現在の属性コンボを割り出す
+            data.currentAttackElement = logicManager.GetCombinedElement(data.confirmedAttackCards);
+        }
+        else {
+            data.currentAttackElement = "無";
+        }
+
+        data.defenseTotalPower = 0;
+        for (const auto& card : data.confirmedDefenseCards) {
+            data.defenseTotalPower += card.GetPower();
+        }
+        // ========================================================
     }
     else if (packet.type == (int)CommandType::SYNC_PRIVATE_HAND) {
         int targetIdx = packet.value1;
