@@ -74,9 +74,10 @@ void BattleInputManager::ProcessSurrender(BattleData& data, LocalClientData& loc
 // -------------------------------------------------------------
 // 攻撃・防御の決定ボタン処理
 // -------------------------------------------------------------
-void BattleInputManager::ProcessActionButtons(BattleData& data, 
+void BattleInputManager::ProcessActionButtons(BattleData& data,
     LocalClientData& localData, const InputManager& input,
     int humanIdx, bool isHumanTurn, PlayerAction& action) {
+
     // マジックナンバー回避用変数
     const int DECISION_AREA_W = 271, DECISION_AREA_H = 325;
     const int ATK_BTN_X = 5, ATK_BTN_Y = 60, DEF_BTN_X = 340, DEF_BTN_Y = 60;
@@ -104,7 +105,6 @@ void BattleInputManager::ProcessActionButtons(BattleData& data,
             }
 
             // --- ターゲットの確定処理 ---
-            // localData.localTargetIdx が選ばれていればそれを使い、未選択なら自動決定
             if (localData.localTargetIdx != -1) {
                 data.targetIdx = localData.localTargetIdx;
             }
@@ -124,8 +124,13 @@ void BattleInputManager::ProcessActionButtons(BattleData& data,
             }
             data.playerTarget = true;
 
-            // --- データを共有用（data）に確定させる ---
-            data.confirmedAttackCards = localData.localSelectingCards;
+            // --- 【修正】データを共有用（data）に確定させる（int から Card への詰め替え） ---
+            data.confirmedAttackCards.clear();
+            for (int idx : localData.localSelectingCards) {
+                if (idx >= 0 && idx < (int)turnHandVec.size()) {
+                    data.confirmedAttackCards.push_back(turnHandVec[idx]);
+                }
+            }
 
             action.isAttackDecision = true;
             action.hasAction = true;
@@ -143,8 +148,18 @@ void BattleInputManager::ProcessActionButtons(BattleData& data,
         localData.isHoverIdx[BattleOption::DEFENSE] = input.IsMouseOver(DEF_BTN_X, DEF_BTN_Y, DECISION_AREA_W, DECISION_AREA_H);
 
         if (input.IsLeftClicked() && localData.isHoverIdx[BattleOption::DEFENSE]) {
-            // 防御カードを確定させる
-            data.confirmedDefenseCards = localData.localSelectingCards;
+
+            // 【修正】人間のプレイヤーの手札ベクトルを取得
+            Player& defender = data.Player_Turn[humanIdx];
+            const auto& defenderHandVec = defender.Hand.GetCards();
+
+            // --- 【修正】防御カードを確定させる（int から Card への詰め替え） ---
+            data.confirmedDefenseCards.clear();
+            for (int idx : localData.localSelectingCards) {
+                if (idx >= 0 && idx < (int)defenderHandVec.size()) {
+                    data.confirmedDefenseCards.push_back(defenderHandVec[idx]);
+                }
+            }
 
             action.isDefenseDecision = true;
             action.hasAction = true;

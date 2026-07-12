@@ -195,27 +195,38 @@ void BattleLogicManager::ProcessDefenseSelectPhase(BattleData& data, LocalClient
     if (data.targetIdx < 0 || data.targetIdx >= (int)data.Player_Turn.size()) return;
 
     Player& defender = data.Player_Turn[data.targetIdx];
+    const auto& hand = defender.Hand.GetCards(); // 手札の参照をキャッシュ
 
     // --- 属性相性やカテゴリ等の基本制限を適用 ---
     UpdateCardSelectability(data, local, defender);
 
-    for (size_t i = 0; i < defender.Hand.GetCards().size(); ++i) {
-        // 属性や回復処理中の制限
-        if (!CanSelectDefenseCard(data, local.localSelectingCards, defender, i, data.currentAttackElement)) {
+    // 【修正】UIが選択中の int 配列を、CanSelectDefenseCard 用に Card 実体配列へ一時変換
+    std::vector<Card> tempSelectedCards;
+    for (int idx : local.localSelectingCards) {
+        if (idx >= 0 && idx < (int)hand.size()) {
+            tempSelectedCards.push_back(hand[idx]);
+        }
+    }
+
+    for (size_t i = 0; i < hand.size(); ++i) {
+        const Card& card = hand[i];
+
+        // 【修正】第2引数に Card 配列(tempSelectedCards)、第4引数に Card 実体(card)を渡す
+        if (!CanSelectDefenseCard(data, tempSelectedCards, defender, card, data.currentAttackElement)) {
             local.isCardSelectable[i] = false;
             continue;
         }
 
         // MP不足の奇跡カード制限
-        const Card& card = defender.Hand.GetCards()[i];
         if (!CanUseMiracleCard(defender, card)) {
             local.isCardSelectable[i] = false;
             continue;
         }
 
-        // 選択済みカード制限
-        auto it = std::find(data.confirmedDefenseCards.begin(), data.confirmedDefenseCards.end(), i);
-        if (it != data.confirmedDefenseCards.end()) {
+        // 【修正】重複選択の制限
+        // data.confirmedDefenseCards ではなく、現在UIで選択中の local.localSelectingCards から探す
+        auto it = std::find(local.localSelectingCards.begin(), local.localSelectingCards.end(), (int)i);
+        if (it != local.localSelectingCards.end()) {
             local.isCardSelectable[i] = false;
         }
     }
@@ -241,7 +252,8 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data, LocalClientD
         // 最初に選んだカードを取得
         std::string firstCardName = "";
         if (!data.confirmedAttackCards.empty()) {
-            firstCardName = attacker.Hand.GetCards()[data.confirmedAttackCards[0]].GetName();
+            // ★修正：インデックスではなく直接カード実体から取得
+            firstCardName = data.confirmedAttackCards[0].GetName();
         }
 
         // 換カードの場合、ステータス編集フェーズへ
@@ -260,7 +272,7 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data, LocalClientD
 
             // 相手の手札からランダムに1枚選ぶ
             if (!target.Hand.GetCards().empty()) {
-                // ランダムに購入対象を選択
+                // ランダムに購入対象を選択（※ローカル操作用なのでインデックスのままでOK）
                 local.buyTargetCardIdx = rand() % target.Hand.GetCards().size();
                 local.isBuyingAction = true; // 購入モードON
                 data.currentPhase = BattlePhase::DefenseSelect; // 承認へ
@@ -281,7 +293,7 @@ void BattleLogicManager::ProcessAttackRevealPhase(BattleData& data, LocalClientD
         // 回復カードが含まれているかチェック
         if (IsHealingAction(data, attacker)) {
             // ターゲットが自分の時はクリックせずにそのまま演出フェーズに
-            if (IsSelfTarget(data,local)) {
+            if (IsSelfTarget(data, local)) {
                 data.currentPhase = BattlePhase::Effect;
                 local.animationTimer = 0;
             }
@@ -350,17 +362,15 @@ void BattleLogicManager::ProcessEffectPhase(BattleData& data, LocalClientData& l
 
     // 各種カード効果（奇跡や売買換など）の発動
     if (!data.isPendingAttack) {
-        for (int idx : data.confirmedAttackCards) {
-            const Card& card = attacker.Hand.GetCards()[idx];
-            // 【修正】第2引数に local を追加
+        // ★修正：確定リストのカード実体をそのまま回す
+        for (const Card& card : data.confirmedAttackCards) {
             ExecuteCardEffect(data, local, attacker, target, card);
         }
     }
 
     if (target != nullptr) {
-        for (int idx : data.confirmedDefenseCards) {
-            const Card& defCard = target->Hand.GetCards()[idx];
-            // 【修正】第2引数に local を追加
+        // ★修正：確定リストのカード実体をそのまま回す
+        for (const Card& defCard : data.confirmedDefenseCards) {
             ExecuteCardEffect(data, local, *target, &attacker, defCard);
         }
     }
@@ -394,7 +404,6 @@ void BattleLogicManager::ProcessEffectPhase(BattleData& data, LocalClientData& l
 
     // ダメージ適用とカウンター判定
     if (target != nullptr) {
-        // 【修正】ダメージ表示演出等で必要なため local を追加
         ResolveDamage(data, local, attacker, *target, attackData, defenseData);
     }
 
@@ -430,30 +439,39 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data, LocalClientData& loc
     // 使ったカードの破棄とドロー・次ターンの準備
     Player& attacker = data.Player_Turn[data.currentTurnIdx];
 
-    // 使用された奇跡カードの枚数をカウントする
+    // ★修正: 使用された奇跡カードの枚数をカウント
     int miracleUsageCount = 0;
-    for (int idx : data.confirmedAttackCards) {
-        if (idx >= 0 && idx < (int)attacker.Hand.GetCards().size()) {
-            const Card& card = attacker.Hand.GetCards()[idx];
-            if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
-                // アンリミテッド等で0になった後にマイナスにならないよう max でガード
-                attacker.setMp((std::max)(0, attacker.getMp() - card.GetMP()));
-                miracleUsageCount++;
-            }
+    for (const Card& card : data.confirmedAttackCards) {
+        if (card.GetCategory() == CardCategory::Magic) {
+            attacker.setMp((std::max)(0, attacker.getMp() - card.GetMP()));
+            miracleUsageCount++;
         }
     }
 
-    // 攻撃側のカード破棄
-    std::sort(data.confirmedAttackCards.rbegin(), data.confirmedAttackCards.rend());
-    int removedCount = 0;
-    for (int idx : data.confirmedAttackCards) {
-        const Card& card = attacker.Hand.GetCards()[idx];
-        // 奇跡(Magic)以外なら破棄
-        if (card.GetCategory() != CardCategory::Magic) {
-            attacker.Hand.Remove(idx);
-            removedCount++;
+    // 攻撃側のカード破棄処理
+    // インデックス情報がないため、使ったカード名(またはGraphicIndex)を手札から探して削除リストを作ります
+    std::vector<int> removeIndices;
+    auto& atkHand = attacker.Hand.GetCards();
+    for (const Card& playedCard : data.confirmedAttackCards) {
+        if (playedCard.GetCategory() != CardCategory::Magic) {
+            // 手札の中から一致するカードのインデックスを探す
+            for (int i = 0; i < (int)atkHand.size(); ++i) {
+                // 既に削除予定に入っていない、かつカードの種類(名前)が同じものを見つける
+                if (std::find(removeIndices.begin(), removeIndices.end(), i) == removeIndices.end()) {
+                    if (atkHand[i].GetName() == playedCard.GetName()) {
+                        removeIndices.push_back(i);
+                        break; // 見つけたら次の使用カードへ
+                    }
+                }
+            }
         }
     }
+    // インデックスがずれないように降順にソートして削除
+    std::sort(removeIndices.rbegin(), removeIndices.rend());
+    for (int idx : removeIndices) {
+        attacker.Hand.Remove(idx);
+    }
+    int removedCount = removeIndices.size();
 
     // ドロー処理（破棄した分 ＋ 奇跡使用分）
     int totalDraw = removedCount + miracleUsageCount;
@@ -468,27 +486,33 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data, LocalClientData& loc
 
         // 防御側も同様に奇跡使用枚数をカウント
         int defMiracleCount = 0;
-        for (int idx : data.confirmedDefenseCards) {
-            if (idx >= 0 && idx < (int)target.Hand.GetCards().size()) {
-                const Card& card = target.Hand.GetCards()[idx];
-                if (card.GetCategory() == CardCategory::Magic) {
-                    // 奇跡カードのMP消費
-                    target.setMp(target.getMp() - card.GetMP());
-                    defMiracleCount++;
-                }
+        for (const Card& card : data.confirmedDefenseCards) {
+            if (card.GetCategory() == CardCategory::Magic) {
+                target.setMp((std::max)(0, target.getMp() - card.GetMP()));
+                defMiracleCount++;
             }
         }
 
         // 防御側のカード破棄
-        std::sort(data.confirmedDefenseCards.rbegin(), data.confirmedDefenseCards.rend());
-        int defRemovedCount = 0;
-        for (int idx : data.confirmedDefenseCards) {
-            const Card& card = target.Hand.GetCards()[idx];
-            if (card.GetCategory() != CardCategory::Magic) {
-                target.Hand.Remove(idx);
-                defRemovedCount++;
+        std::vector<int> defRemoveIndices;
+        auto& defHand = target.Hand.GetCards();
+        for (const Card& playedCard : data.confirmedDefenseCards) {
+            if (playedCard.GetCategory() != CardCategory::Magic) {
+                for (int i = 0; i < (int)defHand.size(); ++i) {
+                    if (std::find(defRemoveIndices.begin(), defRemoveIndices.end(), i) == defRemoveIndices.end()) {
+                        if (defHand[i].GetName() == playedCard.GetName()) {
+                            defRemoveIndices.push_back(i);
+                            break;
+                        }
+                    }
+                }
             }
         }
+        std::sort(defRemoveIndices.rbegin(), defRemoveIndices.rend());
+        for (int idx : defRemoveIndices) {
+            target.Hand.Remove(idx);
+        }
+        int defRemovedCount = defRemoveIndices.size();
 
         // 防御側のドロー処理
         if (!target.Status.dead) {
@@ -501,7 +525,6 @@ void BattleLogicManager::ProcessIdlePhase(BattleData& data, LocalClientData& loc
 
         // 死亡判定
         if (target.Status.dead) {
-            // 【修正】UI上のステータスリセット等のために local を追加想定
             RemovePlayer(data, data.targetIdx);
         }
     }
@@ -533,9 +556,9 @@ bool BattleLogicManager::CanUseMiracleCard(const Player& player, const Card& car
 
 // 判定用のヘルパー関数
 bool BattleLogicManager::IsHealingAction(const BattleData& data, const Player& attacker) {
-    for (int idx : data.confirmedAttackCards) {
-        if (idx < 0 || idx >= (int)attacker.Hand.GetCards().size()) continue;
-        CardCategory cat = attacker.Hand.GetCards()[idx].GetCategory();
+    // 確定リストのカード実体を直接判定
+    for (const Card& card : data.confirmedAttackCards) {
+        CardCategory cat = card.GetCategory();
         if (cat == CardCategory::Healing || cat == CardCategory::MagicHealing) {
             return true;
         }
@@ -585,9 +608,8 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
         }
     }
     else if (name == "バイバイ" && target != nullptr && data.confirmedAttackCards.size() >= 2) {
-        // 選ばれた2枚目のカード（売りつけるアイテム）を取得
-        int sellItemIdx = data.confirmedAttackCards[1];
-        const Card& sellCard = attacker.Hand.GetCards()[sellItemIdx];
+        // ★修正: 選ばれた2枚目のカード（売りつけるアイテム）を直接取得
+        const Card& sellCard = data.confirmedAttackCards[1];
 
         int price = sellCard.GetMoney();
 
@@ -641,7 +663,7 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
             // MPを回復させる (※必要に応じて最大MPを超えないような上限チェックをここに入れます)
             target->setMp(target->getMp() + card.GetPower());
 
-            // UI側に回復量を表示するための記録（HP回復と共用にするかはお好みで調整してください）
+            // UI側に回復量を表示するための記録
             data.lastHealingDone += card.GetPower();
             data.resultTargetIdx = data.targetIdx;
 
@@ -650,44 +672,29 @@ void BattleLogicManager::ExecuteCardEffect(BattleData& data, LocalClientData& lo
         }
     }
     else if (card.GetCategory() == CardCategory::Magic) {
-        // 奇跡カードの個別処理（名前で分岐）
         std::string name = card.GetName();
 
-        // 全体攻撃化奇跡(攻撃フェーズのみ)
         if (name == "クラス") {
             data.isAllAttack = true;
         }
-        // 攻撃を2倍にする奇跡(攻撃)
         else if (name == "ズ") {
-            // 重ね掛けも考慮して乗算にする（初期値は1.0fにしておく）
             data.attackMultiplier *= 2.0f;
         }
-        // 無属性攻撃カードのみ無効化(防御フェーズのみ)
         else if (name == "キャッスル") {
             data.isImmune = true;
         }
-        // 相手のHPを吸収(攻撃)
         else if (name == "スティール") {
-            // 吸収フラグ
             data.isDrain = true;
         }
-        // 奇跡カードのみ確率で弾く(防御)
         else if (name == "山") {
-            // 50%の確率で弾くフラグを立てる
             if ((rand() % 100) < 50) {
                 data.isParry = true;
             }
         }
-        // 自身のMPを全て消費して２倍の攻撃力として攻撃する(攻撃)
         else if (name == "アンリミテッド") {
-            // 現在のMP×2を「追加攻撃力」として保持してからMPを0にする
             data.extraAttackPower += (attacker.getMp() * 2);
             attacker.setMp(0);
         }
-    }
-    // 攻撃カードや防御カードにも特殊効果を持たせたい場合
-    else if (card.GetCategory() == CardCategory::Attack) {
-        std::string name = card.GetName();
     }
 }
 
@@ -725,26 +732,27 @@ std::string BattleLogicManager::GetCardEffectDescription(const Card& card) {
 }
 
 // 共通の属性加算関数
-std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
-    if (selectedIdxs.empty()) return "無";
+std::string BattleLogicManager::GetCombinedElement(const std::vector<Card>& cards) {
+    if (cards.empty()) return "無";
 
     // UIの「属性違いによる自動キャンセル」を防ぐための偽装
-    std::string firstCardName = hand[selectedIdxs[0]].GetName();
+    const std::string& firstCardName = cards[0].GetName();
     if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
-        if (selectedIdxs.size() >= 2) {
+        if (cards.size() >= 2) {
             // 2枚目のカードが選ばれたら、全体の属性をそのカードの属性だとUIに信じ込ませる
-            return hand[selectedIdxs[1]].GetType();
+            return cards[1].GetType();
         }
         return "無";
     }
 
     // 1枚目で初期化
-    std::string result = hand[selectedIdxs[0]].GetType();
-    if (result == "") result = "無";
+    std::string result = cards[0].GetType();
+    if (result.empty()) result = "無";
 
-    for (size_t i = 1; i < selectedIdxs.size(); ++i) {
-        std::string next = hand[selectedIdxs[i]].GetType();
-        if (next == "") next = "無";
+    // 拡張for文を使わず、2枚目(インデックス1)から判定するため通常のfor文を使用
+    for (size_t i = 1; i < cards.size(); ++i) {
+        std::string next = cards[i].GetType();
+        if (next.empty()) next = "無";
 
         // 同属性なら何も起きない（継続）
         if (result == next) continue;
@@ -769,6 +777,24 @@ std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selec
         return "無";
     }
     return result;
+}
+
+// 共通の属性加算関数 (UI選択インデックス渡し版)
+std::string BattleLogicManager::GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand) {
+    if (selectedIdxs.empty()) return "無";
+
+    std::vector<Card> selectedCards;
+    selectedCards.reserve(selectedIdxs.size()); // メモリ確保の最適化
+
+    // インデックスからカードの実体を抽出
+    for (int idx : selectedIdxs) {
+        if (idx >= 0 && idx < (int)hand.size()) {
+            selectedCards.push_back(hand[idx]);
+        }
+    }
+
+    // 抽出したリストを使って、メインの関数(実体渡し版)を呼び出す
+    return GetCombinedElement(selectedCards);
 }
 
 void BattleLogicManager::UpdateCardAnimation(BattleData& data, LocalClientData& local) {
@@ -854,38 +880,33 @@ void BattleLogicManager::RemovePlayer(BattleData& data, int targetIdx) {
 
 TotalAttack BattleLogicManager::CalculateTotalAttack(const BattleData& data, Player& attacker) {
     TotalAttack total;
-    auto& hand = attacker.Hand.GetCards();
+    total.power = 0;
+    total.isAll = false;
 
-    // 確定した攻撃カード配列を使用
+    // 確定リストが空かチェック
     if (data.confirmedAttackCards.empty()) {
         total.type = "無";
         return total;
     }
-    if (data.confirmedAttackCards[0] < 0 || data.confirmedAttackCards[0] >= (int)hand.size()) return total;
 
-    // 特殊カード時に属性を偽装する
-    const std::string& firstCardName = hand[data.confirmedAttackCards[0]].GetName();
+    // 特殊カード時に属性を偽装する (実体から直接取得)
+    const std::string& firstCardName = data.confirmedAttackCards[0].GetName();
     if (firstCardName == "バイバイ" || firstCardName == "チョイスチョイス" || firstCardName == "イコールイコール") {
         if (data.confirmedAttackCards.size() >= 2) {
-            total.type = hand[data.confirmedAttackCards[1]].GetType(); // 2枚目に合わせる
+            total.type = data.confirmedAttackCards[1].GetType(); // 2枚目に合わせる
         }
         else {
             total.type = "無";
         }
-        total.power = 0;     // 通常攻撃の二重ダメージを防ぐため0
-        total.isAll = false; // エラー回避
         return total;
     }
 
     // 新しい共通関数で属性を一発取得
-    total.type = GetCombinedElement(data.confirmedAttackCards, hand);
+    // ※GetCombinedElementが std::vector<Card> のみを受け取る仕様に変更されたと想定
+    total.type = GetCombinedElement(data.confirmedAttackCards);
 
-    for (size_t i = 0; i < data.confirmedAttackCards.size(); i++) {
-        int index = data.confirmedAttackCards[i];
-        if (index < 0 || index >= (int)hand.size()) continue;
-
-        const Card& card = hand[index];
-
+    // 拡張for文で処理 (インデックス参照を廃止)
+    for (const Card& card : data.confirmedAttackCards) {
         // 回復系カードは攻撃計算から除外する
         if (card.GetCategory() == Healing || card.GetCategory() == MagicHealing) {
             continue;
@@ -920,8 +941,9 @@ void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local,
     // 弾かれた（保留された）攻撃であれば無条件で魔法扱いにする
     bool hasMagicAttack = data.isPendingAttack;
     if (!hasMagicAttack) {
-        for (int idx : data.confirmedAttackCards) {
-            if (attacker.Hand.GetCards()[idx].GetCategory() == CardCategory::Magic) {
+        // 【修正】インデックスではなくカード実体からカテゴリを直接判定
+        for (const Card& card : data.confirmedAttackCards) {
+            if (card.GetCategory() == CardCategory::Magic) {
                 hasMagicAttack = true;
                 break;
             }
@@ -1000,7 +1022,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local,
         local.popups.emplace_back(PopupType::Damage, data.targetIdx, UIHelper::GetPopupText(PopupType::Damage, finalDamage), 60, 0);
     }
     else {
-        // 【追加】ダメージが0だった場合（かつ、NoHitの早期リターンを抜けてきた場合）
+        // ダメージが0だった場合（かつ、NoHitの早期リターンを抜けてきた場合）
         local.popups.emplace_back(PopupType::NoDamage, data.targetIdx, UIHelper::GetPopupText(PopupType::NoDamage, 0), 60, 0);
     }
 
@@ -1020,6 +1042,7 @@ void BattleLogicManager::ResolveDamage(BattleData& data, LocalClientData& local,
 }
 
 void BattleLogicManager::RecalculateAttackElement(BattleData& data, LocalClientData& local, const std::vector<Card>& hand) {
+    // ※ local.localSelectingCards はUI操作用のため std::vector<int> のままと想定
     if (!local.localSelectingCards.empty()) {
         int firstIdx = local.localSelectingCards[0];
         if (firstIdx >= 0 && firstIdx < (int)hand.size()) {
@@ -1036,38 +1059,29 @@ void BattleLogicManager::RecalculateAttackElement(BattleData& data, LocalClientD
         }
     }
     // 共通関数を使って簡略化
+    // ※もしGetCombinedElementがvector<Card>専用になった場合は、ここで hand[idx] を変換して渡す必要があります
     data.currentAttackElement = GetCombinedElement(local.localSelectingCards, hand);
 }
 
 TotalDefense BattleLogicManager::CalculateTotalDefense(const BattleData& data, Player& defender) {
     TotalDefense total;
     total.power = 0;
-    total.isActive = false; // 初期化漏れ対策
+    total.isActive = false;
 
-    auto& hand = defender.Hand.GetCards();
-
+    // 確定リストが空かチェック
     if (data.confirmedDefenseCards.empty()) {
-        total.type = _T("無");
-        return total;
-    }
-
-    // 選んだカードが手札の範囲外なら強制リターン
-    if (data.confirmedDefenseCards[0] < 0 || data.confirmedDefenseCards[0] >= (int)hand.size()) {
-        total.type = _T("無");
+        total.type = "無"; // _T("無") から std::string に統一
         return total;
     }
 
     total.isActive = true;
 
-    // 共通関数で属性を取得
-    total.type = GetCombinedElement(data.confirmedDefenseCards, hand);
+    // 共通関数で属性を取得 (vector<Card>を渡す想定)
+    total.type = GetCombinedElement(data.confirmedDefenseCards);
 
-    for (size_t i = 0; i < data.confirmedDefenseCards.size(); ++i) {
-        int index = data.confirmedDefenseCards[i];
-        if (index < 0 || index >= (int)hand.size()) continue;
-
-        // 防御力を加算
-        total.power += hand[index].GetPower();
+    // 【修正】拡張for文で処理。インデックスの範囲外チェックなどは不要になりました
+    for (const Card& card : data.confirmedDefenseCards) {
+        total.power += card.GetPower();
     }
     return total;
 }
@@ -1092,23 +1106,23 @@ void BattleLogicManager::RecalculateDefenseElement(BattleData& data, LocalClient
 }
 
 // 防御カードの選択可否を判定（UI入力制限用）
-bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const std::vector<int>& currentSelectedCards, 
-    const Player& defender, int cardIdx, const std::string& incomingAttackElement) {
+bool BattleLogicManager::CanSelectDefenseCard(const BattleData& data, const std::vector<Card>& currentSelectedCards,
+    const Player& defender, const Card& selectingCard, const std::string& incomingAttackElement) {
+
     // 回復アクション中の場合、防御カード選択をブロックする
     const Player& attacker = data.Player_Turn[data.currentTurnIdx];
     if (IsHealingAction(data, attacker)) {
         return false;
     }
 
-    auto& hand = defender.Hand.GetCards();
-    if (cardIdx < 0 || cardIdx >= (int)hand.size()) return false;
+    // ※実体が直接渡されるため、古いインデックスの範囲チェックは不要になります
 
     // UIやAIから渡された「現在選択中のカードリスト」に、試しにカードを追加してみる
-    std::vector<int> tempSelected = currentSelectedCards;
-    tempSelected.push_back(cardIdx);
+    std::vector<Card> tempSelected = currentSelectedCards;
+    tempSelected.push_back(selectingCard);
 
-    // その状態での属性を計算
-    std::string hypotheticalElement = GetCombinedElement(tempSelected, hand);
+    // その状態での属性を計算（新しい GetCombinedElement の仕様に合わせる）
+    std::string hypotheticalElement = GetCombinedElement(tempSelected);
 
     // 出来上がった属性で、敵の攻撃を防げるかを判定
     return DamageResolver::IsValidGuard(incomingAttackElement, hypotheticalElement);

@@ -24,14 +24,15 @@ public:
     bool CanUseMiracleCard(const Player& player, const Card& card);
 
     // 攻撃・防御で共通して使う属性の合成ロジック
+    std::string GetCombinedElement(const std::vector<Card>& cards);
     std::string GetCombinedElement(const std::vector<int>& selectedIdxs, const std::vector<Card>& hand);
 
     // カードの選択可否を更新する関数（LocalClientData に結果を書き込むため必要）
     void UpdateCardSelectability(const BattleData& data, LocalClientData& local, const Player& player);
 
     // UI側で防御カードを選択できるか判定する関数
-    bool CanSelectDefenseCard(const BattleData& data, const std::vector<int>& currentSelectedCards,
-        const Player& defender, int cardIdx, const std::string& incomingAttackElement);
+    bool CanSelectDefenseCard(const BattleData& data, const std::vector<Card>& currentSelectedCards,
+        const Player& defender, const Card& selectingCard, const std::string& incomingAttackElement);
 
 private:
     // フェーズごとの処理（UIフラグや入力状態を触るため、すべて local が必要）

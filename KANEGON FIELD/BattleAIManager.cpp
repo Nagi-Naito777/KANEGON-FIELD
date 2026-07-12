@@ -7,7 +7,6 @@
 #include <vector>
 #include <random>
 
-// シグネチャから不要な引数（humanIdx, isHumanTurn）を削除。内部でControllerTypeを判定します。
 void BattleAIManager::Update(BattleData& data) {
 
 	// =============================================================
@@ -66,7 +65,8 @@ void BattleAIManager::Update(BattleData& data) {
 
 		// --- 行動の確定 ---
 		if (bestIndex != -1) {
-			data.confirmedAttackCards.push_back(bestIndex);
+			// カード実体を格納
+			data.confirmedAttackCards.push_back(hand[bestIndex]);
 			currentMp -= hand[bestIndex].GetMP();
 			int totalPower = hand[bestIndex].GetPower();
 
@@ -87,16 +87,18 @@ void BattleAIManager::Update(BattleData& data) {
 						if (i == bestIndex) continue;
 
 						CardCategory cat = hand[i].GetCategory();
-						// ★修正：isCardSelectable(UI側データ)を使わず、純粋なルールで追加判定を行う
 						if ((cat == Attack || cat == Magic) && hand[i].GetAdd() && hand[i].GetMP() <= currentMp) {
 
-							std::vector<int> tempSelected = data.confirmedAttackCards;
-							tempSelected.push_back(i);
-							std::string nextElement = logic.GetCombinedElement(tempSelected, hand);
+							// 型が std::vector<Card> になったためそのまま代入可能
+							std::vector<Card> tempSelected = data.confirmedAttackCards;
+							tempSelected.push_back(hand[i]);
+
+							// 【修正】新しくなった vector<Card> 版の GetCombinedElement を呼び出す（第二引数は不要）
+							std::string nextElement = logic.GetCombinedElement(tempSelected);
 
 							if (data.currentAttackElement != "無" && nextElement == "無") continue;
 
-							data.confirmedAttackCards.push_back(i);
+							data.confirmedAttackCards.push_back(hand[i]);
 							currentMp -= hand[i].GetMP();
 							totalPower += hand[i].GetPower();
 							data.currentAttackElement = nextElement;
@@ -151,8 +153,11 @@ void BattleAIManager::Update(BattleData& data) {
 
 				if ((cat == Defense || cat == Bilingual) && targetHand[i].GetMP() <= currentMp) {
 
-					if (logic.CanSelectDefenseCard(data, data.confirmedDefenseCards, targetPlayer, i, incomingElement)) {
-						data.confirmedDefenseCards.push_back(i);
+					// 【修正】第2引数を vector<Card> に変更し、第4引数にはインデックスではなくカード実体(targetHand[i])を渡す
+					if (logic.CanSelectDefenseCard(data, data.confirmedDefenseCards, targetPlayer, targetHand[i], incomingElement)) {
+
+						// カード実体を格納
+						data.confirmedDefenseCards.push_back(targetHand[i]);
 						currentMp -= targetHand[i].GetMP();
 						totalDefensePower += targetHand[i].GetPower(); // 防御力を加算
 

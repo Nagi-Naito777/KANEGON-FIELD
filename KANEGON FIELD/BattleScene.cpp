@@ -201,17 +201,24 @@ void BattleScene::HandleNetworkReceive() {
 
 void BattleScene::ProcessClientAction(const GamePacket& packet) {
     int clientId = packet.value3;
+    if (clientId < 0 || clientId >= (int)data.Player_Turn.size()) return;
+
+    // クライアントの行動なので、ホストが持っているそのクライアントの手札を参照する
+    Player& clientPlayer = data.Player_Turn[clientId];
+    const auto& handCards = clientPlayer.Hand.GetCards();
 
     if (data.currentPhase == BattlePhase::Select && clientId == data.currentTurnIdx) {
         data.targetIdx = packet.value2;
         data.confirmedAttackCards.clear();
         for (int c = 0; c < MAX_HAND_CARD; ++c) {
-            if (packet.playedCardIds[c] != -1) {
-                data.confirmedAttackCards.push_back(packet.playedCardIds[c]);
+            int handIdx = packet.playedCardIds[c];
+            // 手札のインデックスとして妥当かチェックしてから実体を保存
+            if (handIdx != -1 && handIdx >= 0 && handIdx < (int)handCards.size()) {
+                data.confirmedAttackCards.push_back(handCards[handIdx]);
             }
         }
 
-        // ★修正: クライアントからのアクションがヒール行動だった場合、DefenseSelectを飛ばす
+        // ヒール行動だった場合、DefenseSelectを飛ばす
         bool isHeal = (packet.value1 == 1);
         data.currentPhase = isHeal ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
 
@@ -221,8 +228,9 @@ void BattleScene::ProcessClientAction(const GamePacket& packet) {
     else if (data.currentPhase == BattlePhase::DefenseSelect && clientId == data.targetIdx) {
         data.confirmedDefenseCards.clear();
         for (int c = 0; c < MAX_HAND_CARD; ++c) {
-            if (packet.playedCardIds[c] != -1) {
-                data.confirmedDefenseCards.push_back(packet.playedCardIds[c]);
+            int handIdx = packet.playedCardIds[c];
+            if (handIdx != -1 && handIdx >= 0 && handIdx < (int)handCards.size()) {
+                data.confirmedDefenseCards.push_back(handCards[handIdx]);
             }
         }
         data.currentPhase = BattlePhase::DefenseReveal;
@@ -247,28 +255,29 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
             data.currentPhase = newPhase;
             localData.animFrame = 0;
 
-            // 【追加】フェーズがホスト主導で切り替わった場合、クライアントの選択UIもリセットする
+            // フェーズがホスト主導で切り替わった場合、クライアントの選択UIもリセットする
             localData.localSelectingCards.clear();
             localData.localTargetIdx = -1;
         }
 
         data.targetIdx = packet.value5;
 
-        // ★修正: targetIdx == 0 の条件を削除。
-        // パケットが来るたびに常に最新の場札（グローバル情報）で上書きして同期ズレを防ぐ
+        // 【修正】パケットから流れてくるカードID(固有ID)をもとに、CardDBから実体を取得して再構築
         data.confirmedAttackCards.clear();
         data.confirmedDefenseCards.clear();
         for (int c = 0; c < MAX_HAND_CARD; ++c) {
-            if (packet.playedCardIds[c] != -1) data.confirmedAttackCards.push_back(packet.playedCardIds[c]);
-            if (packet.cardIds[c] != -1)       data.confirmedDefenseCards.push_back(packet.cardIds[c]);
+            if (packet.playedCardIds[c] != -1) {
+                data.confirmedAttackCards.push_back(CardDB.GetCardByID(packet.playedCardIds[c]));
+            }
+            if (packet.cardIds[c] != -1) {
+                data.confirmedDefenseCards.push_back(CardDB.GetCardByID(packet.cardIds[c]));
+            }
         }
     }
     else if (packet.type == (int)CommandType::SYNC_PRIVATE_HAND) {
         int targetIdx = packet.value1;
         if (targetIdx >= 0) {
-            // ★【修正】手札非表示バグの解消
-            // ホストは「そのクライアント自身の手札」しか送ってこないため、
-            // ここで届いた targetIdx が「クライアント自身の正しいプレイヤーID」になります。
+            // 手札非表示バグの解消
             if (localData.myPlayerIndex != targetIdx) {
                 localData.myPlayerIndex = targetIdx;
             }
@@ -339,27 +348,37 @@ void BattleScene::UpdateClientUIEvents() {
 void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnline) {
     if (!myAction.hasAction) return;
 
+    // 自キャラの手札を取得 (UIが渡してくるのは手札のインデックスなので、ここから実体を引く)
+    Player& myPlayer = data.Player_Turn[localData.myPlayerIndex];
+    const auto& handCards = myPlayer.Hand.GetCards();
+
     if (isOnline) {
         if (netManager->IsHost()) {
             if (myAction.isAttackDecision) {
                 data.confirmedAttackCards.clear();
-                for (int cardId : myAction.selectedCardIdxs) data.confirmedAttackCards.push_back(cardId);
+                for (int idx : myAction.selectedCardIdxs) {
+                    if (idx >= 0 && idx < (int)handCards.size()) {
+                        data.confirmedAttackCards.push_back(handCards[idx]); // 【修正】インデックスから実体を登録
+                    }
+                }
                 data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
                 localData.animFrame = 0;
                 data.isChanged = true;
 
-                // 【追加】ホスト側の選択状態をクリア
                 localData.localSelectingCards.clear();
                 localData.localTargetIdx = -1;
             }
             else if (myAction.isDefenseDecision) {
                 data.confirmedDefenseCards.clear();
-                for (int cardId : myAction.selectedCardIdxs) data.confirmedDefenseCards.push_back(cardId);
+                for (int idx : myAction.selectedCardIdxs) {
+                    if (idx >= 0 && idx < (int)handCards.size()) {
+                        data.confirmedDefenseCards.push_back(handCards[idx]); // 【修正】インデックスから実体を登録
+                    }
+                }
                 data.currentPhase = BattlePhase::DefenseReveal;
                 localData.animFrame = 0;
                 data.isChanged = true;
 
-                // 【追加】ホスト側の選択状態をクリア
                 localData.localSelectingCards.clear();
                 localData.localTargetIdx = -1;
             }
@@ -377,13 +396,13 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
                     actionPacket.cardIds[c] = -1;
                 }
 
+                // 【ここは変更なし】クライアントは「手札の何番目を選んだか(インデックス)」をホストに送信する
                 for (size_t c = 0; c < myAction.selectedCardIdxs.size() && c < MAX_HAND_CARD; ++c) {
                     actionPacket.playedCardIds[c] = myAction.selectedCardIdxs[c];
                 }
 
                 netManager->SendPacket(actionPacket);
 
-                // 【追加】パケット送信後、クライアント側の選択状態UIをクリア
                 localData.localSelectingCards.clear();
                 localData.localTargetIdx = -1;
             }
@@ -392,15 +411,26 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
     else {
         // オフライン処理
         if (myAction.isAttackDecision) {
+            data.confirmedAttackCards.clear();
+            for (int idx : myAction.selectedCardIdxs) {
+                if (idx >= 0 && idx < (int)handCards.size()) {
+                    data.confirmedAttackCards.push_back(handCards[idx]); // 【修正】
+                }
+            }
             data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
             localData.animFrame = 0;
-            // 【追加】
+
             localData.localSelectingCards.clear();
             localData.localTargetIdx = -1;
         }
         else if (myAction.isDefenseDecision) {
+            data.confirmedDefenseCards.clear();
+            for (int idx : myAction.selectedCardIdxs) {
+                if (idx >= 0 && idx < (int)handCards.size()) {
+                    data.confirmedDefenseCards.push_back(handCards[idx]); // 【修正】
+                }
+            }
             data.currentPhase = BattlePhase::DefenseReveal;
-            // 【追加】
             localData.localSelectingCards.clear();
             localData.localTargetIdx = -1;
         }
@@ -437,7 +467,6 @@ void BattleScene::UpdateHostLogicAndSync() {
 
         // 1. 基本ゲームデータと「場に出たカード」の送信
         for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-            // 【修正】未初期化変数を防ぐため {} を付与
             GamePacket syncDataPacket{};
             syncDataPacket.type = (int)CommandType::SYNC_GAME_DATA;
             syncDataPacket.value1 = i;
@@ -446,18 +475,17 @@ void BattleScene::UpdateHostLogicAndSync() {
             syncDataPacket.value4 = (int)data.currentPhase;
             syncDataPacket.value5 = data.targetIdx;
 
-            // 【修正】配列全体を明示的に -1 (空) で初期化
             for (int c = 0; c < MAX_HAND_CARD; ++c) {
                 syncDataPacket.playedCardIds[c] = -1;
                 syncDataPacket.cardIds[c] = -1;
             }
 
-            // カードの詰め込み
+            // 【修正】配列内の実体から .GetID() を使って固有IDを取得し、パケットに格納する
             for (size_t c = 0; c < data.confirmedAttackCards.size() && c < MAX_HAND_CARD; ++c) {
-                syncDataPacket.playedCardIds[c] = data.confirmedAttackCards[c];
+                syncDataPacket.playedCardIds[c] = data.confirmedAttackCards[c].GetID();
             }
             for (size_t c = 0; c < data.confirmedDefenseCards.size() && c < MAX_HAND_CARD; ++c) {
-                syncDataPacket.cardIds[c] = data.confirmedDefenseCards[c];
+                syncDataPacket.cardIds[c] = data.confirmedDefenseCards[c].GetID();
             }
             netManager->BroadcastPacket(syncDataPacket);
         }
@@ -465,12 +493,10 @@ void BattleScene::UpdateHostLogicAndSync() {
         // 2. 手札データの送信
         const auto& clientHandles = netManager->GetClientHandles();
         for (int i = 0; i < (int)data.Player_Turn.size(); ++i) {
-            // 【修正】ここでも memset を廃止し、{} 初期化を使用
             GamePacket handPacket{};
             handPacket.type = (int)CommandType::SYNC_PRIVATE_HAND;
             handPacket.value1 = i;
 
-            // 【修正】配列全体を明示的に -1 (空) で初期化
             for (int c = 0; c < MAX_HAND_CARD; ++c) {
                 handPacket.cardIds[c] = -1;
                 handPacket.playedCardIds[c] = -1;

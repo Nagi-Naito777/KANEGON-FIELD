@@ -90,8 +90,8 @@ struct BattleData {
 	bool isChanged = false;
 
 	// --- 確定した行動データ（全員の画面に反映されるもの） ---
-	std::vector<int> confirmedAttackCards;	// 決定ボタンを押して確定した攻撃カード
-	std::vector<int> confirmedDefenseCards; // 決定ボタンを押して確定した防御カード
+	std::vector<Card> confirmedAttackCards;	// 決定ボタンを押して確定した攻撃カード
+	std::vector<Card> confirmedDefenseCards;// 決定ボタンを押して確定した防御カード
 	int targetIdx;							// 確定したターゲットの番号
 	bool playerTarget = false;				// プレイヤーを指定したかどうか
 
