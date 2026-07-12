@@ -195,6 +195,50 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, LocalClientData&
 
     const auto& humanHandVec = humanPlayer.Hand.GetCards();
 
+    // ==============================================================
+    // 【追加・修正】クライアント側でもUI用の選択可能判定を計算する
+    // ==============================================================
+    if (localData.isCardSelectable.size() != humanHandVec.size()) {
+        localData.isCardSelectable.resize(humanHandVec.size(), false);
+    }
+
+    // 1. フェーズごとの基本的な選択可能判定
+    for (int i = 0; i < (int)humanHandVec.size(); ++i) {
+        bool isSelectable = false;
+        if (data.currentPhase == BattlePhase::Select && isHumanTurn) {
+            isSelectable = (humanHandVec[i].GetCategory() != Defense);
+        }
+        else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
+            int cat = humanHandVec[i].GetCategory();
+            isSelectable = (cat == Defense || cat == Bilingual);
+        }
+        localData.isCardSelectable[i] = isSelectable;
+    }
+
+    // 2. 既にカードが選択されている場合のコンボ制限（追加不可のカードをグレーアウト等させるため）
+    if (!localData.localSelectingCards.empty()) {
+        int baseIdx = localData.localSelectingCards[0];
+        CardCategory baseCat = humanHandVec[baseIdx].GetCategory();
+        bool isBaseHeal = (baseCat == Healing || baseCat == MagicHealing);
+        bool isBaseForbiddenToAdd = (baseCat == Magic || baseCat == All || isBaseHeal);
+
+        for (int i = 0; i < (int)humanHandVec.size(); ++i) {
+            if (localData.isCardSelectable[i] && i != baseIdx) {
+                bool isClickedAddable = humanHandVec[i].GetAdd();
+                CardCategory clickedCat = humanHandVec[i].GetCategory();
+                bool isClickedHeal = (clickedCat == Healing || clickedCat == MagicHealing);
+                bool isClickedBilingual = (clickedCat == Bilingual);
+
+                if (isBaseForbiddenToAdd || !isClickedAddable || isClickedHeal || (data.currentPhase == BattlePhase::Select && isClickedBilingual)) {
+                    if (baseCat != Sell) { // Sell以外は追加不可
+                        localData.isCardSelectable[i] = false;
+                    }
+                }
+            }
+        }
+    }
+    // ==============================================================
+
     for (int i = 0; i < (int)humanHandVec.size(); ++i) {
         int col = i % MAX_CARDS_PER_ROW;
         int row = i / MAX_CARDS_PER_ROW;
@@ -205,22 +249,12 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, LocalClientData&
             localData.hoveredCardIdx = i;
         }
 
-        // 選択可能判定（localDataを参照）
-        bool isSelectable = false;
-        if (data.currentPhase == BattlePhase::Select && isHumanTurn) {
-            isSelectable = (humanHandVec[i].GetCategory() != Defense);
-        }
-        else if (data.currentPhase == BattlePhase::DefenseSelect && data.targetIdx == humanIdx) {
-            int cat = humanHandVec[i].GetCategory();
-            isSelectable = (cat == Defense || cat == Bilingual);
-        }
-
         // 現在選択中のリストを localData から取得
         std::vector<int>& activeSelection = localData.localSelectingCards;
         bool isAlreadySelected = (std::find(activeSelection.begin(), activeSelection.end(), i) != activeSelection.end());
 
-        // クリック可否判定（isCardSelectable も localData を参照）
-        bool canClick = isAlreadySelected || (i < (int)localData.isCardSelectable.size() && localData.isCardSelectable[i]);
+        // 【修正】上で計算した isCardSelectable をそのまま利用してクリック判定
+        bool canClick = isAlreadySelected || localData.isCardSelectable[i];
 
         if (canClick && input.IsMouseOver(x, y, CARD_W, CARD_H)) {
             localData.isHoverCardIdx[i] = true;
@@ -234,40 +268,20 @@ void BattleInputManager::ProcessHandSelection(BattleData& data, LocalClientData&
                     else activeSelection.erase(it);
                 }
                 // --- 新規選択処理 ---
-                else if (isSelectable) {
-                    // ... (選択ロジックは既存と同じ)
-                    bool isClickedAddable = humanHandVec[i].GetAdd();
-                    CardCategory clickedCat = humanHandVec[i].GetCategory();
-                    bool isClickedHeal = (clickedCat == Healing || clickedCat == MagicHealing);
-
+                // 【修正】ここは `localData.isCardSelectable[i]` を条件にする
+                else if (localData.isCardSelectable[i]) {
                     if (activeSelection.empty()) {
                         activeSelection.push_back(i);
                     }
                     else {
-                        int baseIdx = activeSelection[0];
-                        CardCategory baseCat = humanHandVec[baseIdx].GetCategory();
-                        bool isBaseHeal = (baseCat == Healing || baseCat == MagicHealing);
-                        bool isClickedBilingual = (clickedCat == Bilingual);
-                        bool isBaseForbiddenToAdd = (baseCat == Magic || baseCat == All || isBaseHeal);
-
-                        if (isBaseForbiddenToAdd || !isClickedAddable || isClickedHeal || (data.currentPhase == BattlePhase::Select && isClickedBilingual)) {
-                            activeSelection.clear();
-                            activeSelection.push_back(i);
-                        }
-                        else if (baseCat == Sell || !isBaseForbiddenToAdd) {
-                            activeSelection.push_back(i);
-                        }
-                        else { continue; }
+                        // 既に冒頭のロジックで弾いているため、基本的にはそのまま追加でOK
+                        activeSelection.push_back(i);
                     }
                 }
-                else { continue; }
 
                 // --- 属性と威力の再計算 ---
-                // 【重要】LogicManager側で以下の変更が必要です：
-                // RecalculateAttackElement(BattleData& data, const std::vector<int>& selection, ...);
                 BattleLogicManager logic;
                 if (data.currentPhase == BattlePhase::Select) {
-                    // ここで localData.localSelectingCards を渡して計算させる
                     logic.RecalculateAttackElement(data, localData, humanHandVec);
                     data.attackTotalPower = 0;
                     for (int idx : activeSelection) data.attackTotalPower += humanHandVec[idx].GetPower();

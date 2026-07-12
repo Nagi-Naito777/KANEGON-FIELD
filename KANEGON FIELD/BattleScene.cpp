@@ -42,7 +42,7 @@ void BattleScene::Initialize(const std::vector<Player>& initialPlayers) {
 
 	// オンラインかどうかを判定
 	bool isOnline = (netManager != nullptr && netManager->IsConnected());
-	//printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
+	printfDx("DEBUG: netManager pointer: %p, isConnected: %d\n", (void*)netManager, (int)(netManager ? netManager->IsConnected() : -1));
 
 	// --- AI対戦（オフライン）の時だけ実行する処理 ---
     if (!isOnline) {
@@ -120,13 +120,13 @@ void BattleScene::AssignPlayerIDs(bool isOnline) {
     if (isOnline) {
         if (netManager->IsHost()) {
             localData.myPlayerIndex = 0;
-            //printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
+            printfDx("DEBUG: [INIT] I am Host. Assigned ID: 0\n");
         }
         else {
             if (localData.myPlayerIndex < 0) {
                 localData.myPlayerIndex = 1; // ロビー処理移行時までの暫定
             }
-            //printfDx("DEBUG: [INIT] I am Client. My ID: %d\n", localData.myPlayerIndex);
+            printfDx("DEBUG: [INIT] I am Client. My ID: %d\n", localData.myPlayerIndex);
         }
     }
     else {
@@ -242,14 +242,15 @@ void BattleScene::ProcessHostSyncData(const GamePacket& packet) {
         data.Player_Turn[targetIdx].setHp(packet.value2);
         data.currentTurnIdx = packet.value3;
 
-        // ▼▼▼ 追加・修正箇所 ▼▼▼
-        // フェーズの変更を検知し、切り替わっていたらアニメーションフレームをリセットする
         BattlePhase newPhase = static_cast<BattlePhase>(packet.value4);
         if (data.currentPhase != newPhase) {
             data.currentPhase = newPhase;
             localData.animFrame = 0;
+
+            // 【追加】フェーズがホスト主導で切り替わった場合、クライアントの選択UIもリセットする
+            localData.localSelectingCards.clear();
+            localData.localTargetIdx = -1;
         }
-        // ▲▲▲ ここまで ▲▲▲
 
         data.targetIdx = packet.value5;
 
@@ -346,6 +347,10 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
                 data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
                 localData.animFrame = 0;
                 data.isChanged = true;
+
+                // 【追加】ホスト側の選択状態をクリア
+                localData.localSelectingCards.clear();
+                localData.localTargetIdx = -1;
             }
             else if (myAction.isDefenseDecision) {
                 data.confirmedDefenseCards.clear();
@@ -353,29 +358,34 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
                 data.currentPhase = BattlePhase::DefenseReveal;
                 localData.animFrame = 0;
                 data.isChanged = true;
+
+                // 【追加】ホスト側の選択状態をクリア
+                localData.localSelectingCards.clear();
+                localData.localTargetIdx = -1;
             }
         }
         else {
             if (myAction.isAttackDecision || myAction.isDefenseDecision) {
-                // 【修正】memsetを廃止し、C++のゼロ初期化 {} を使用
                 GamePacket actionPacket{};
                 actionPacket.type = (int)CommandType::CLIENT_ACTION;
                 actionPacket.value1 = myAction.isHealAction ? 1 : 0;
                 actionPacket.value2 = myAction.targetIdx;
                 actionPacket.value3 = localData.myPlayerIndex;
 
-                // 【修正】配列全体を明示的に -1 (空) で初期化し、ゴミデータを防ぐ
                 for (int c = 0; c < MAX_HAND_CARD; ++c) {
                     actionPacket.playedCardIds[c] = -1;
                     actionPacket.cardIds[c] = -1;
                 }
 
-                // 選択されたカードIDを格納
                 for (size_t c = 0; c < myAction.selectedCardIdxs.size() && c < MAX_HAND_CARD; ++c) {
                     actionPacket.playedCardIds[c] = myAction.selectedCardIdxs[c];
                 }
 
                 netManager->SendPacket(actionPacket);
+
+                // 【追加】パケット送信後、クライアント側の選択状態UIをクリア
+                localData.localSelectingCards.clear();
+                localData.localTargetIdx = -1;
             }
         }
     }
@@ -384,9 +394,15 @@ void BattleScene::ProcessPlayerAction(const PlayerAction& myAction, bool isOnlin
         if (myAction.isAttackDecision) {
             data.currentPhase = myAction.isHealAction ? BattlePhase::DefenseReveal : BattlePhase::DefenseSelect;
             localData.animFrame = 0;
+            // 【追加】
+            localData.localSelectingCards.clear();
+            localData.localTargetIdx = -1;
         }
         else if (myAction.isDefenseDecision) {
             data.currentPhase = BattlePhase::DefenseReveal;
+            // 【追加】
+            localData.localSelectingCards.clear();
+            localData.localTargetIdx = -1;
         }
     }
 }
@@ -484,8 +500,8 @@ void BattleScene::Draw() const {
 
     uiManager.Draw(data, localData);
 
-    /*DrawFormatString(10, 150, Col.GetBla(), "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
+    DrawFormatString(10, 150, Col.GetBla(), "ONLINE_DEBUG: AtkCards=%d, DefCards=%d, Phase=%d",
         (int)data.confirmedAttackCards.size(),
         (int)data.confirmedDefenseCards.size(),
-        (int)data.currentPhase);*/
+        (int)data.currentPhase);
 }
